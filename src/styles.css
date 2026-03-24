@@ -60,6 +60,15 @@
   --sidebar-accent-foreground: oklch(0.21 0.006 285.885);
   --sidebar-border: oklch(0.92 0.004 286.32);
   --sidebar-ring: oklch(0.871 0.006 286.286);
+  --chat-bg: #ffffff;
+  --chat-bg-secondary: #F2F3F5;
+  --chat-bg-tertiary: #E3E5E8;
+  --chat-bg-input: #EBEDEF;
+  --chat-sidebar: #F2F3F5;
+  --chat-nav: #E3E5E8;
+  --chat-hover: rgba(116, 127, 141, 0.1);
+  --chat-active: rgba(116, 127, 141, 0.2);
+  --chat-border: #e5e7eb;
 }
 
 .dark {
@@ -115,6 +124,15 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(0.274 0.006 286.033);
   --sidebar-ring: oklch(0.442 0.017 285.786);
+  --chat-bg: #313338;
+  --chat-bg-secondary: #2B2D31;
+  --chat-bg-tertiary: #1E1F22;
+  --chat-bg-input: #383A40;
+  --chat-sidebar: #2B2D31;
+  --chat-nav: #1E1F22;
+  --chat-hover: rgba(79, 84, 92, 0.5);
+  --chat-active: rgba(79, 84, 92, 0.5);
+  --chat-border: #3f4147;
 }
 
 @theme inline {
@@ -155,6 +173,13 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --color-chat-bg: var(--chat-bg);
+  --color-chat-bg-secondary: var(--chat-bg-secondary);
+  --color-chat-bg-tertiary: var(--chat-bg-tertiary);
+  --color-chat-bg-input: var(--chat-bg-input);
+  --color-chat-sidebar: var(--chat-sidebar);
+  --color-chat-nav: var(--chat-nav);
+  --color-chat-border: var(--chat-border);
 }
 
 html,
@@ -334,6 +359,14 @@ a {
 .site-footer {
   border-top: 1px solid var(--line);
   background: color-mix(in oklab, var(--header-bg) 84%, transparent 16%);
+}
+
+@utility hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 @layer base {

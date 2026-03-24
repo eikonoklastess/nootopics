@@ -18,6 +18,7 @@ import type * as lib_messages from "../lib/messages.js";
 import type * as messages from "../messages.js";
 import type * as migrations from "../migrations.js";
 import type * as notifications from "../notifications.js";
+import type * as reactions from "../reactions.js";
 import type * as readPositions from "../readPositions.js";
 import type * as search from "../search.js";
 import type * as servers from "../servers.js";
@@ -42,6 +43,7 @@ declare const fullApi: ApiFromModules<{
   messages: typeof messages;
   migrations: typeof migrations;
   notifications: typeof notifications;
+  reactions: typeof reactions;
   readPositions: typeof readPositions;
   search: typeof search;
   servers: typeof servers;

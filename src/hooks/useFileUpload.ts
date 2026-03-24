@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation } from "convex/react";
+import { toast } from "sonner";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import {
@@ -20,6 +21,7 @@ export interface UploadedFile {
 }
 
 const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB
+const MAX_PENDING_FILES = 10;
 
 export function useFileUpload() {
   const generateUploadUrl = useMutation(api.messages.generateUploadUrl);
@@ -29,20 +31,44 @@ export function useFileUpload() {
   const pendingFilesRef = useRef<PendingFile[]>([]);
 
   const addFiles = useCallback((fileList: FileList | File[]) => {
-    const newFiles: PendingFile[] = [];
-    let nextError: string | null = null;
-    for (const file of Array.from(fileList)) {
-      if (file.size > MAX_FILE_SIZE) {
-        nextError = `"${file.name}" exceeds the 25 MB limit.`;
-        continue;
+    const files = Array.from(fileList);
+    const validationErrors: string[] = [];
+    let lastValidationError: string | null = null;
+
+    setPendingFiles((prev) => {
+      let room = MAX_PENDING_FILES - prev.length;
+      const newFiles: PendingFile[] = [];
+
+      for (const file of files) {
+        if (file.size > MAX_FILE_SIZE) {
+          const msg = `"${file.name}" exceeds the 25 MB limit.`;
+          validationErrors.push(msg);
+          lastValidationError = msg;
+          continue;
+        }
+        if (room <= 0) {
+          const msg = `Max ${MAX_PENDING_FILES} files — "${file.name}" was not added.`;
+          validationErrors.push(msg);
+          lastValidationError = msg;
+          continue;
+        }
+        room -= 1;
+        const preview =
+          file.type.startsWith("image/") || file.type.startsWith("video/")
+            ? URL.createObjectURL(file)
+            : "";
+        newFiles.push({ file, preview });
       }
-      const preview = file.type.startsWith("image/") || file.type.startsWith("video/")
-        ? URL.createObjectURL(file)
-        : "";
-      newFiles.push({ file, preview });
+
+      return [...prev, ...newFiles];
+    });
+
+    for (const msg of validationErrors) {
+      toast.error(msg);
     }
-    setError(nextError);
-    setPendingFiles((prev) => [...prev, ...newFiles]);
+    if (lastValidationError !== null) {
+      setError(lastValidationError);
+    }
   }, []);
 
   const removeFile = useCallback((index: number) => {

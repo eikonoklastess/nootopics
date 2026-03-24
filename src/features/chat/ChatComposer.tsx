@@ -89,7 +89,7 @@ export function ChatComposer({
 }: ChatComposerProps) {
   const { activeServerId, activeSpace } = useAppStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const [showPlusMenu, setShowPlusMenu] = useState(false);
   const [showMentions, setShowMentions] = useState(false);
   const [mentionQuery, setMentionQuery] = useState('');
@@ -179,7 +179,15 @@ export function ChatComposer({
     inputRef.current?.focus();
   };
 
-  const handlePaste = (event: React.ClipboardEvent<HTMLInputElement>) => {
+  const resizeTextarea = () => {
+    const textarea = inputRef.current;
+    if (textarea) {
+      textarea.style.height = 'auto';
+      textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
+    }
+  };
+
+  const handlePaste = (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const files: File[] = [];
     for (const item of Array.from(event.clipboardData.items)) {
       if (item.kind === 'file') {
@@ -225,9 +233,11 @@ export function ChatComposer({
         />
 
         <div className="flex items-center px-4 py-3 relative">
-          <div
+          <button
+            type="button"
             onClick={() => setShowPlusMenu((value) => !value)}
             className="p-2 hover:bg-zinc-300 dark:bg-zinc-600/20 dark:hover:bg-zinc-600 rounded-full mr-3 cursor-pointer transition text-zinc-500 dark:text-zinc-400"
+            aria-label="Attach file or create thread"
           >
             <svg
               className="w-5 h-5"
@@ -238,12 +248,12 @@ export function ChatComposer({
             >
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
             </svg>
-          </div>
+          </button>
 
-          <input
+          <textarea
             ref={inputRef}
-            type="text"
-            className="flex-1 bg-transparent border-none outline-none text-zinc-800 dark:text-zinc-200 font-medium placeholder-zinc-500 dark:placeholder-zinc-400"
+            rows={1}
+            className="flex-1 bg-transparent border-none outline-none text-zinc-800 dark:text-zinc-200 font-medium placeholder-zinc-500 dark:placeholder-zinc-400 resize-none max-h-[200px] leading-normal"
             placeholder={isUploading ? 'Uploading...' : placeholder ?? 'Message this channel'}
             value={content}
             disabled={isUploading}
@@ -288,18 +298,23 @@ export function ChatComposer({
                 }
                 return;
               }
+
+              if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                onSend(event as unknown as React.FormEvent);
+              }
             }}
             onChange={(event) => {
               const nextValue = event.target.value;
               onContentChange(nextValue);
               onTyping();
+              resizeTextarea();
 
-              // Mention check
               const atIndex = nextValue.lastIndexOf('@');
               let isMention = false;
-              if (atIndex !== -1 && (atIndex === 0 || nextValue[atIndex - 1] === ' ')) {
+              if (atIndex !== -1 && (atIndex === 0 || nextValue[atIndex - 1] === ' ' || nextValue[atIndex - 1] === '\n')) {
                 const query = nextValue.slice(atIndex + 1);
-                if (!query.includes(' ') && query.length < 30) {
+                if (!query.includes(' ') && !query.includes('\n') && query.length < 30) {
                   setMentionQuery(query);
                   setMentionIndex(0);
                   setShowMentions(true);
@@ -308,12 +323,11 @@ export function ChatComposer({
               }
               if (!isMention) setShowMentions(false);
 
-              // Emoji check
               const colonIndex = nextValue.lastIndexOf(':');
               let isEmoji = false;
-              if (colonIndex !== -1 && (colonIndex === 0 || nextValue[colonIndex - 1] === ' ')) {
+              if (colonIndex !== -1 && (colonIndex === 0 || nextValue[colonIndex - 1] === ' ' || nextValue[colonIndex - 1] === '\n')) {
                 const query = nextValue.slice(colonIndex + 1);
-                if (!query.includes(' ') && query.length > 0 && query.length < 30) {
+                if (!query.includes(' ') && !query.includes('\n') && query.length > 0 && query.length < 30) {
                   setEmojiQuery(query);
                   setEmojiIndex(0);
                   setShowEmojiAutocomplete(true);
@@ -324,14 +338,16 @@ export function ChatComposer({
             }}
           />
 
-          <div 
+          <button
+            type="button"
             onClick={() => setShowEmojiPicker((v) => !v)}
             className="p-1 ml-2 hover:bg-zinc-300 dark:hover:bg-zinc-600 rounded-lg cursor-pointer transition text-zinc-500 hover:text-emerald-500 dark:hover:text-emerald-400 dark:text-zinc-400"
+            aria-label="Emoji picker"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.182 15.182a4.5 4.5 0 01-6.364 0M21 12a9 9 0 11-18 0 9 9 0 0118 0zM9.75 9.75c0 .414-.168.75-.375.75S9 10.164 9 9.75 9.168 9 9.375 9s.375.336.375.75zm3.625 0c0 .414-.168.75-.375.75s-.375-.336-.375-.75.168-.75.375-.75.375.336.375.75z" />
             </svg>
-          </div>
+          </button>
 
           {isUploading && (
              <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin ml-2" />

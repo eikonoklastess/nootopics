@@ -53,7 +53,7 @@ export function EmojiPicker({ onSelect }: EmojiPickerProps) {
         data={data} 
         custom={customEmojis}
         onEmojiSelect={handleEmojiSelect}
-        theme="dark"
+        theme={document.documentElement.classList.contains('dark') ? 'dark' : 'light'}
         previewPosition="none"
         skinTonePosition="none"
       />

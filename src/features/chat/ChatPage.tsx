@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from 'convex/react';
+import { useMutation, usePaginatedQuery, useQuery } from 'convex/react';
 import { useCallback, useDeferredValue, useEffect, useRef, useState } from 'react';
 import { useUser } from '@clerk/clerk-react';
 import type { Id } from '../../../convex/_generated/dataModel';
@@ -6,6 +6,8 @@ import { api } from '../../../convex/_generated/api';
 import { NavigationSidebar } from '../../components/NavigationSidebar';
 import { ServerSidebar } from '../../components/ServerSidebar';
 import { useFileUpload } from '../../hooks/useFileUpload';
+import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
+import { useUrlSync } from '../../hooks/useUrlSync';
 import { usePresence } from '../../hooks/usePresence';
 import { useAppStore } from '../../store/useAppStore';
 import { ChatComposer } from './ChatComposer';
@@ -16,8 +18,20 @@ import { PinnedMessagesPanel } from './PinnedMessagesPanel';
 import { ThreadCreatorPanel } from './ThreadCreatorPanel';
 import { ThreadPanel } from './ThreadPanel';
 import { findAllTokens } from './utils';
+import { MemberListPanel } from './MemberListPanel';
 import { NotificationsPanel, type NotificationItem } from './NotificationsPanel';
 import { useDesktopNotifications } from './useDesktopNotifications';
+import { toast } from 'sonner';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../../components/ui/alert-dialog';
 import type {
   ChatMessage,
   MessageSearchResult,
@@ -38,6 +52,7 @@ function PresenceSync() {
 }
 
 export function ChatPage() {
+  useUrlSync();
   const {
     activeSpace,
     activeChannelId,
@@ -63,20 +78,24 @@ export function ChatPage() {
     useState<Id<'messages'> | null>(null);
   const [showPinnedMessages, setShowPinnedMessages] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showMemberList, setShowMemberList] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [flashMessageId, setFlashMessageId] = useState<Id<'messages'> | null>(null);
   const [flashReplyId, setFlashReplyId] = useState<Id<'messages'> | null>(null);
   const [showMobileNavigation, setShowMobileNavigation] = useState(false);
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState<Id<'messages'> | null>(null);
   const [pendingReplyJumpId, setPendingReplyJumpId] = useState<Id<'messages'> | null>(
     null,
   );
+  const [pendingMessages, setPendingMessages] = useState<ChatMessage[]>([]);
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const liveParsedSearch = parseSearchQuery(searchQuery);
   const debouncedParsedSearch = parseSearchQuery(debouncedSearchQuery);
   const fileUpload = useFileUpload();
   const dragCounter = useRef(0);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const activeConversationTarget = getActiveConversationTarget({
@@ -111,13 +130,21 @@ export function ChatPage() {
           }
         : 'skip',
     ) as ChatMessage[] | undefined) ?? undefined;
+  const {
+    results: paginatedMessages,
+    status: paginateStatus,
+    loadMore,
+  } = usePaginatedQuery(
+    api.messages.listPaginated,
+    activeConversationTarget && !hasAnchoredMessageContext
+      ? activeConversationTarget
+      : 'skip',
+    { initialNumItems: 50 },
+  );
   const latestMessages =
-    (useQuery(
-      api.messages.list,
-      activeConversationTarget && !hasAnchoredMessageContext
-        ? activeConversationTarget
-        : 'skip',
-    ) as ChatMessage[] | undefined) ?? undefined;
+    paginatedMessages.length > 0
+      ? (paginatedMessages as unknown as ChatMessage[])
+      : undefined;
   const messages = anchoredMessages ?? latestMessages ?? [];
 
   const channels =
@@ -245,6 +272,8 @@ export function ChatPage() {
     setPendingReplyJumpId(null);
     setFlashReplyId(null);
     setShowPinnedMessages(false);
+    setShowMemberList(false);
+    setPendingMessages([]);
   }, [activeConversationKey]);
 
   useEffect(() => {
@@ -320,6 +349,21 @@ export function ChatPage() {
     return () => clearTimeout(timeout);
   }, [flashReplyId]);
 
+  useKeyboardShortcuts({
+    onEscape: () => {
+      closeThreadPanels();
+      setShowNotifications(false);
+      setShowMemberList(false);
+      setShowMobileNavigation(false);
+      setShowMobileSidebar(false);
+    },
+    onSearch: () => {
+      if (activeSpace !== 'server') return;
+      setSearchQuery('');
+      queueMicrotask(() => searchInputRef.current?.focus());
+    },
+  });
+
   const handleTyping = useCallback(() => {
     if (!activeConversationTarget) {
       return;
@@ -357,18 +401,42 @@ export function ChatPage() {
         })
         .filter((id): id is Id<'users'> => !!id) ?? [];
 
-    await sendMessage({
-      ...activeConversationTarget,
+    const tempId = `pending-${Date.now()}` as Id<'messages'>;
+    const tempMessage: ChatMessage = {
+      _id: tempId,
+      _creationTime: Date.now(),
       content: content.trim(),
-      mentions: mentionIds.length > 0 ? mentionIds : undefined,
-      files: uploadedFiles.length > 0 ? uploadedFiles : undefined,
-    });
-    clearMessageContext();
-    setContent('');
-    void markAsRead(activeConversationTarget).catch(() => {});
-    void typingStop(activeConversationTarget).catch(() => {});
-    if (typingTimer.current) {
-      clearTimeout(typingTimer.current);
+      deleted: false,
+      isEdited: false,
+      replyCount: 0,
+      pinned: false,
+      user: {
+        _id: undefined,
+        name: clerkUser?.fullName ?? clerkUser?.firstName ?? 'You',
+        imageUrl: clerkUser?.imageUrl ?? '',
+        clerkId: clerkUser?.id ?? '',
+      },
+      files: [],
+    };
+    setPendingMessages((prev) => [tempMessage, ...prev]);
+
+    try {
+      await sendMessage({
+        ...activeConversationTarget,
+        content: content.trim(),
+        mentions: mentionIds.length > 0 ? mentionIds : undefined,
+        files: uploadedFiles.length > 0 ? uploadedFiles : undefined,
+      });
+      setPendingMessages((prev) => prev.filter((m) => m._id !== tempId));
+      clearMessageContext();
+      setContent('');
+      void markAsRead(activeConversationTarget).catch(() => {});
+      void typingStop(activeConversationTarget).catch(() => {});
+      if (typingTimer.current) {
+        clearTimeout(typingTimer.current);
+      }
+    } catch {
+      setPendingMessages((prev) => prev.filter((m) => m._id !== tempId));
     }
   };
 
@@ -417,7 +485,12 @@ export function ChatPage() {
   };
 
   const handleDelete = async (messageId: Id<'messages'>) => {
-    await removeMessage({ messageId });
+    try {
+      await removeMessage({ messageId });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to delete message');
+    }
+    setDeleteTargetId(null);
   };
 
   const handleSearchSelect = (result: MessageSearchResult) => {
@@ -489,6 +562,8 @@ export function ChatPage() {
     activeSpace === 'direct'
       ? 'Select a direct message to start chatting'
       : 'Select a channel to start chatting';
+
+  const allMessages = [...pendingMessages, ...messages];
 
   const handleNotificationSelect = async (notification: NotificationItem) => {
     await markNotificationRead({ notificationId: notification._id });
@@ -627,13 +702,27 @@ export function ChatPage() {
                 title="Notifications"
                 type="button"
               >
-                <span role="img" aria-label="notifications">
-                  🔔
-                </span>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
+                </svg>
                 {unreadNotifications.length > 0 && (
                   <span className="absolute right-1 top-1 h-2.5 w-2.5 rounded-full bg-rose-500" />
                 )}
               </button>
+
+              {activeSpace === 'server' && (
+                <button
+                  type="button"
+                  className={`rounded-full p-2 text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-800 dark:hover:bg-zinc-800 dark:hover:text-zinc-100 ${showMemberList ? 'bg-zinc-200 dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100' : ''}`}
+                  onClick={() => setShowMemberList((prev) => !prev)}
+                  title="Member List"
+                  aria-label="Toggle member list"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+                  </svg>
+                </button>
+              )}
 
               {activeSpace === 'server' && (
                 <div className="w-full md:ml-auto md:max-w-xl md:pl-4">
@@ -645,15 +734,16 @@ export function ChatPage() {
                     }}
                     className={`mr-2 inline-flex p-2 shrink-0 rounded-full transition ${showPinnedMessages ? 'bg-zinc-200 dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100' : 'text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}
                     title="Pinned Messages"
+                    aria-label="Pinned Messages"
                   >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z" />
                     </svg>
                   </button>
                   <div className="inline-block w-[calc(100%-3rem)] min-w-0 align-middle md:w-[calc(100%-3.5rem)]">
                     <ChatSearchBox
                       hasAnchoredContext={hasAnchoredMessageContext}
+                      inputRef={searchInputRef}
                       isLoading={isSearchLoading}
                       onChange={setSearchQuery}
                       onClearContext={() => {
@@ -682,12 +772,18 @@ export function ChatPage() {
               editContent={editContent}
               editingId={editingId}
               formatSize={formatSize}
+              isLoadingMore={paginateStatus === 'LoadingMore'}
               lastReadSnapshot={lastReadSnapshot}
-              messages={messages}
-              onDelete={handleDelete}
+              messages={allMessages}
+              onDelete={(messageId) => setDeleteTargetId(messageId)}
               onPin={(messageId) => pinMessage({ messageId })}
               onUnpin={(messageId) => unpinMessage({ messageId })}
               onEditContentChange={setEditContent}
+              onLoadMore={
+                !anchoredMessages && paginateStatus === 'CanLoadMore'
+                  ? () => loadMore(50)
+                  : undefined
+              }
               onOpenThread={(message) => {
                 setPendingReplyJumpId(null);
                 setFlashReplyId(null);
@@ -726,6 +822,13 @@ export function ChatPage() {
                 onSelect={(notification) => {
                   void handleNotificationSelect(notification);
                 }}
+              />
+            )}
+
+            {showMemberList && (
+              <MemberListPanel
+                members={conversationMembers}
+                onClose={() => setShowMemberList(false)}
               />
             )}
 
@@ -800,6 +903,26 @@ export function ChatPage() {
           </>
         )}
       </main>
+
+      <AlertDialog open={!!deleteTargetId} onOpenChange={(open) => { if (!open) setDeleteTargetId(null); }}>
+        <AlertDialogContent className="bg-white dark:bg-[#313338] border-zinc-200 dark:border-zinc-700">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Message</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this message? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => { if (deleteTargetId) void handleDelete(deleteTargetId); }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

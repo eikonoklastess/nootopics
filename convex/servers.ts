@@ -155,3 +155,69 @@ export const updateMemberRole = mutation({
     await ctx.db.patch(args.memberId, { role: args.role });
   },
 });
+
+export const leave = mutation({
+  args: { serverId: v.id("servers") },
+  handler: async (ctx, args) => {
+    const { user } = await requireCurrentUserForMutation(ctx);
+
+    const member = await ctx.db
+      .query("members")
+      .withIndex("by_server_id_and_user_id", (q) =>
+        q.eq("serverId", args.serverId).eq("userId", user._id),
+      )
+      .unique();
+
+    if (!member) {
+      throw new Error("You are not a member of this server");
+    }
+
+    if (member.role === "ADMIN") {
+      throw new Error("Server admins cannot leave. Transfer ownership first.");
+    }
+
+    await ctx.db.delete(member._id);
+  },
+});
+
+export const remove = mutation({
+  args: { serverId: v.id("servers") },
+  handler: async (ctx, args) => {
+    const { user } = await requireCurrentUserForMutation(ctx);
+
+    const server = await ctx.db.get(args.serverId);
+    if (!server) {
+      throw new Error("Server not found");
+    }
+
+    if (server.ownerId !== user._id) {
+      throw new Error("Only the server owner can delete this server");
+    }
+
+    const members = await ctx.db
+      .query("members")
+      .withIndex("by_server_id", (q) => q.eq("serverId", args.serverId))
+      .take(500);
+    for (const member of members) {
+      await ctx.db.delete(member._id);
+    }
+
+    const channels = await ctx.db
+      .query("channels")
+      .withIndex("by_server_id", (q) => q.eq("serverId", args.serverId))
+      .take(500);
+    for (const channel of channels) {
+      await ctx.db.delete(channel._id);
+    }
+
+    const categories = await ctx.db
+      .query("categories")
+      .withIndex("by_server_id", (q) => q.eq("serverId", args.serverId))
+      .take(500);
+    for (const category of categories) {
+      await ctx.db.delete(category._id);
+    }
+
+    await ctx.db.delete(args.serverId);
+  },
+});

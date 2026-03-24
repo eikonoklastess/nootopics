@@ -1,5 +1,6 @@
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
+import type { PaginationOptions, PaginationResult } from "convex/server";
 
 type ReaderCtx = QueryCtx | MutationCtx;
 type MessageDoc = Doc<"messages">;
@@ -38,6 +39,30 @@ export async function listTopLevelMessages(
         )
         .order("desc")
         .take(limit);
+}
+
+export async function paginateTopLevelMessages(
+  ctx: ReaderCtx,
+  location: MessageLocation,
+  paginationOpts: PaginationOptions,
+): Promise<PaginationResult<MessageDoc>> {
+  return location.kind === "channel"
+    ? await ctx.db
+        .query("messages")
+        .withIndex("by_channel_id_and_parent_message_id", (q) =>
+          q.eq("channelId", location.channelId).eq("parentMessageId", null),
+        )
+        .order("desc")
+        .paginate(paginationOpts)
+    : await ctx.db
+        .query("messages")
+        .withIndex("by_direct_conversation_id_and_parent_message_id", (q) =>
+          q
+            .eq("directConversationId", location.directConversationId)
+            .eq("parentMessageId", null),
+        )
+        .order("desc")
+        .paginate(paginationOpts);
 }
 
 export async function listTopLevelMessagesAround(

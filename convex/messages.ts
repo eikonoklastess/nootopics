@@ -1,6 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
+import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import {
   requireConversationAccess,
@@ -13,6 +14,7 @@ import {
   getTopLevelMessageCount,
   listTopLevelMessages,
   listTopLevelMessagesAround,
+  paginateTopLevelMessages,
   type MessageLocation,
   resolveMessageFiles,
   resolveUsersById,
@@ -38,6 +40,22 @@ export const list = query({
     const access = await requireConversationAccess(ctx, getConversationTarget(args));
     const topLevel = await listTopLevelMessages(ctx, getMessageLocation(access), 50);
     return await serializeTopLevelMessages(ctx, topLevel);
+  },
+});
+
+export const listPaginated = query({
+  args: {
+    ...conversationArgs,
+    paginationOpts: paginationOptsValidator,
+  },
+  handler: async (ctx, args) => {
+    const access = await requireConversationAccess(ctx, getConversationTarget(args));
+    const location = getMessageLocation(access);
+    const result = await paginateTopLevelMessages(ctx, location, args.paginationOpts);
+    return {
+      ...result,
+      page: await serializeTopLevelMessages(ctx, result.page),
+    };
   },
 });
 

@@ -9,10 +9,21 @@ import type {
 } from "../features/chat/types";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "./ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "./ui/alert-dialog";
 import { Input } from "./ui/input";
 import { ServerSettingsModal } from "./ServerSettingsModal";
 import { ChannelSettingsModal } from "./ChannelSettingsModal";
 import type { Id } from "../../convex/_generated/dataModel";
+import { toast } from "sonner";
 
 export function ServerSidebar() {
   const {
@@ -20,6 +31,7 @@ export function ServerSidebar() {
     activeServerId,
     activeChannelId,
     activeDirectConversationId,
+    setActiveServerId,
     setActiveChannelId,
     setActiveDirectConversationId,
   } = useAppStore();
@@ -74,8 +86,12 @@ export function ServerSidebar() {
       activeSpace === "server" && activeServerId ? { serverId: activeServerId } : "skip",
     ) as ServerEmoji[] | undefined) ?? [];
 
+  const currentUser = useQuery(api.users.current);
+
   const createChannel = useMutation(api.channels.create);
   const createDirectConversation = useMutation(api.directMessages.createOrGet);
+  const leaveServer = useMutation(api.servers.leave);
+  const deleteServer = useMutation(api.servers.remove);
 
   const [isChannelDialogOpen, setIsChannelDialogOpen] = useState(false);
   const [isDirectDialogOpen, setIsDirectDialogOpen] = useState(false);
@@ -96,6 +112,8 @@ export function ServerSidebar() {
   const [isCreateCategoryOpen, setIsCreateCategoryOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
+  const [isLeaveDialogOpen, setIsLeaveDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   const handleCreateCategory = async () => {
     if (!activeServerId || !newCategoryName.trim()) return;
@@ -109,6 +127,30 @@ export function ServerSidebar() {
     if (next.has(categoryId)) next.delete(categoryId);
     else next.add(categoryId);
     setCollapsedCategories(next);
+  };
+
+  const isServerOwner = server && currentUser && server.ownerId === currentUser._id;
+
+  const handleLeaveServer = async () => {
+    if (!activeServerId) return;
+    try {
+      await leaveServer({ serverId: activeServerId });
+      setActiveServerId(null);
+      toast.success("You left the server");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to leave server");
+    }
+  };
+
+  const handleDeleteServer = async () => {
+    if (!activeServerId) return;
+    try {
+      await deleteServer({ serverId: activeServerId });
+      setActiveServerId(null);
+      toast.success("Server deleted");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to delete server");
+    }
   };
 
   const handleCreateChannel = async () => {
@@ -244,10 +286,11 @@ export function ServerSidebar() {
             </div>
           ) : (
             directConversations.map((conversation) => (
-              <div
+              <button
+                type="button"
                 key={conversation._id}
                 onClick={() => setActiveDirectConversationId(conversation._id)}
-                className={`group px-2 py-2 rounded-md flex items-center gap-x-3 w-full hover:bg-zinc-700/10 dark:hover:bg-zinc-700/50 transition cursor-pointer ${
+                className={`group px-2 py-2 rounded-md flex items-center gap-x-3 w-full hover:bg-zinc-700/10 dark:hover:bg-zinc-700/50 transition cursor-pointer text-left ${
                   activeDirectConversationId === conversation._id
                     ? "bg-zinc-700/20 dark:bg-zinc-700/50 text-emerald-600 dark:text-white"
                     : "text-zinc-500 dark:text-zinc-400"
@@ -277,7 +320,7 @@ export function ServerSidebar() {
                         : directUnreadCounts[conversation._id]}
                     </span>
                   )}
-              </div>
+              </button>
             ))
           )}
         </div>
@@ -330,6 +373,20 @@ export function ServerSidebar() {
               <span>Create Channel</span>
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" /></svg>
             </button>
+            {isServerOwner && (
+              <>
+                <div className="h-px bg-neutral-200 dark:bg-zinc-800 my-1" />
+                <button className="w-full flex items-center justify-between px-2 py-1.5 hover:bg-rose-500 hover:text-white rounded transition text-rose-500 dark:text-rose-400" onClick={() => { setIsServerDropdownOpen(false); setIsDeleteDialogOpen(true); }}>
+                  <span>Delete Server</span>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                </button>
+              </>
+            )}
+            <div className="h-px bg-neutral-200 dark:bg-zinc-800 my-1" />
+            <button className="w-full flex items-center justify-between px-2 py-1.5 hover:bg-rose-500 hover:text-white rounded transition text-rose-500 dark:text-rose-400" onClick={() => { setIsServerDropdownOpen(false); setIsLeaveDialogOpen(true); }}>
+              <span>Leave Server</span>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+            </button>
           </div>
         </>
       )}
@@ -337,6 +394,39 @@ export function ServerSidebar() {
       <ServerSettingsModal serverId={activeServerId} isOpen={isServerSettingsOpen} onClose={() => setIsServerSettingsOpen(false)} />
       <ChannelSettingsModal channelId={settingsChannelId} serverId={activeServerId} isOpen={!!settingsChannelId} onClose={() => setSettingsChannelId(null)} />
 
+      <AlertDialog open={isLeaveDialogOpen} onOpenChange={setIsLeaveDialogOpen}>
+        <AlertDialogContent className="bg-white dark:bg-[#313338] text-black dark:text-white border-none">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Leave '{server?.name}'</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to leave this server? You won't be able to rejoin unless you are re-invited.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={() => void handleLeaveServer()}>
+              Leave Server
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent className="bg-white dark:bg-[#313338] text-black dark:text-white border-none">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete '{server?.name}'</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this server? This action cannot be undone. All channels, categories, and members will be permanently removed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={() => void handleDeleteServer()}>
+              Delete Server
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <div className="flex-1 overflow-y-auto px-2 mt-4 space-y-[2px] hide-scrollbar">
         <Dialog open={isChannelDialogOpen} onOpenChange={setIsChannelDialogOpen}>
@@ -375,10 +465,11 @@ export function ServerSidebar() {
 
         {/* Uncategorized Channels */}
         {channels.filter((channel) => !channel.categoryId).map((channel) => (
-          <div
+          <button
+            type="button"
             key={channel._id}
             onClick={() => setActiveChannelId(channel._id)}
-            className={`group px-2 py-2 rounded-md flex items-center gap-x-2 w-full hover:bg-zinc-700/10 dark:hover:bg-zinc-700/50 transition cursor-pointer ${activeChannelId === channel._id ? "bg-zinc-700/20 dark:bg-zinc-700/50 text-indigo-600 dark:text-white" : "text-zinc-500 dark:text-zinc-400"}`}
+            className={`group px-2 py-2 rounded-md flex items-center gap-x-2 w-full hover:bg-zinc-700/10 dark:hover:bg-zinc-700/50 transition cursor-pointer text-left ${activeChannelId === channel._id ? "bg-zinc-700/20 dark:bg-zinc-700/50 text-indigo-600 dark:text-white" : "text-zinc-500 dark:text-zinc-400"}`}
           >
             <span className="opacity-70 text-lg">#</span>
             <p className={`line-clamp-1 font-semibold text-[15px] transition group-hover:text-zinc-600 dark:group-hover:text-zinc-300 flex-1 ${activeChannelId === channel._id ? "text-zinc-800 dark:text-zinc-100" : ""}`}>
@@ -389,10 +480,10 @@ export function ServerSidebar() {
                 {unreadCounts[channel._id] > 99 ? "99+" : unreadCounts[channel._id]}
               </span>
             )}
-            <button onClick={(e) => { e.stopPropagation(); setSettingsChannelId(channel._id); }} className="hidden group-hover:block ml-auto opacity-70 hover:opacity-100">
+            <button type="button" onClick={(e) => { e.stopPropagation(); setSettingsChannelId(channel._id); }} className="hidden group-hover:block group-focus-within:block ml-auto opacity-70 hover:opacity-100" aria-label="Channel settings">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
             </button>
-          </div>
+          </button>
         ))}
 
         {/* Categories */}
@@ -418,10 +509,11 @@ export function ServerSidebar() {
               </div>
               
               {!isCollapsed && categoryChannels.map((channel) => (
-                <div
+                <button
+                  type="button"
                   key={channel._id}
                   onClick={() => setActiveChannelId(channel._id)}
-                  className={`group px-2 py-2 rounded-md flex items-center gap-x-2 w-full hover:bg-zinc-700/10 dark:hover:bg-zinc-700/50 transition cursor-pointer ${activeChannelId === channel._id ? "bg-zinc-700/20 dark:bg-zinc-700/50 text-indigo-600 dark:text-white" : "text-zinc-500 dark:text-zinc-400"}`}
+                  className={`group px-2 py-2 rounded-md flex items-center gap-x-2 w-full hover:bg-zinc-700/10 dark:hover:bg-zinc-700/50 transition cursor-pointer text-left ${activeChannelId === channel._id ? "bg-zinc-700/20 dark:bg-zinc-700/50 text-indigo-600 dark:text-white" : "text-zinc-500 dark:text-zinc-400"}`}
                 >
                   <span className="opacity-70 text-lg">#</span>
                   <p className={`line-clamp-1 font-semibold text-[15px] transition group-hover:text-zinc-600 dark:group-hover:text-zinc-300 flex-1 ${activeChannelId === channel._id ? "text-zinc-800 dark:text-zinc-100" : ""}`}>
@@ -432,10 +524,10 @@ export function ServerSidebar() {
                       {unreadCounts[channel._id] > 99 ? "99+" : unreadCounts[channel._id]}
                     </span>
                   )}
-                  <button onClick={(e) => { e.stopPropagation(); setSettingsChannelId(channel._id); }} className="hidden group-hover:block ml-auto opacity-70 hover:opacity-100">
+                  <button type="button" onClick={(e) => { e.stopPropagation(); setSettingsChannelId(channel._id); }} className="hidden group-hover:block group-focus-within:block ml-auto opacity-70 hover:opacity-100" aria-label="Channel settings">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                   </button>
-                </div>
+                </button>
               ))}
             </div>
           );

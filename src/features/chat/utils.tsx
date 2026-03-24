@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import React, { type ReactNode } from 'react';
 import type { ChatMessage, ServerMember } from './types';
 
 import emojiRegex from 'emoji-regex';
@@ -123,6 +123,181 @@ function twemojiCodePoint(codePointStr: string) {
     .join('-');
 }
 
+type MarkdownChunk = string | ReactNode;
+
+function trimUrlTrailingPunctuation(url: string): string {
+  return url.replace(/[.,;:!?)]+$/u, '');
+}
+
+function splitByRegex(
+  s: string,
+  regex: RegExp,
+  render: (match: RegExpExecArray, key: string) => ReactNode,
+  nextKey: () => string,
+  mapPlain?: (slice: string) => MarkdownChunk[],
+): MarkdownChunk[] {
+  const out: MarkdownChunk[] = [];
+  let last = 0;
+  const r = new RegExp(regex.source, regex.flags.includes('g') ? regex.flags : `${regex.flags}g`);
+  let m: RegExpExecArray | null;
+  while ((m = r.exec(s)) !== null) {
+    if (m.index > last) {
+      const slice = s.slice(last, m.index);
+      if (mapPlain) {
+        if (slice.length > 0) {
+          out.push(...mapPlain(slice));
+        }
+      } else if (slice.length > 0) {
+        out.push(slice);
+      }
+    }
+    out.push(render(m, nextKey()));
+    last = m.index + m[0].length;
+  }
+  if (last < s.length) {
+    const slice = s.slice(last);
+    if (mapPlain) {
+      if (slice.length > 0) {
+        out.push(...mapPlain(slice));
+      }
+    } else if (slice.length > 0) {
+      out.push(slice);
+    }
+  }
+  return out;
+}
+
+function markdownChunksToNode(chunks: MarkdownChunk[]): React.ReactNode {
+  if (chunks.length === 0) {
+    return null;
+  }
+  if (chunks.length === 1) {
+    return chunks[0];
+  }
+  return <>{chunks}</>;
+}
+
+function parseMarkdownLinks(s: string, nextKey: () => string): MarkdownChunk[] {
+  return splitByRegex(
+    s,
+    /(https?:\/\/[^\s<>"{}|\\^`[\]]+)/g,
+    (match, key) => {
+      const href = trimUrlTrailingPunctuation(match[1]);
+      return (
+        <a
+          key={key}
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-indigo-500 hover:underline"
+        >
+          {href}
+        </a>
+      );
+    },
+    nextKey,
+  );
+}
+
+function parseMarkdownAfterStrike(s: string, nextKey: () => string): MarkdownChunk[] {
+  return splitByRegex(
+    s,
+    /~~([^~]+)~~/g,
+    (match, key) => (
+      <span key={key} className="line-through">
+        {markdownChunksToNode(parseMarkdownLinks(match[1], nextKey))}
+      </span>
+    ),
+    nextKey,
+    (plain) => parseMarkdownLinks(plain, nextKey),
+  );
+}
+
+function parseMarkdownAfterItalic(s: string, nextKey: () => string): MarkdownChunk[] {
+  return splitByRegex(
+    s,
+    /\*([^*]+)\*|_([^_\n]+)_/g,
+    (match, key) => {
+      const inner = match[1] ?? match[2];
+      return (
+        <em key={key} className="italic">
+          {markdownChunksToNode(parseMarkdownAfterStrike(inner, nextKey))}
+        </em>
+      );
+    },
+    nextKey,
+    (plain) => parseMarkdownAfterStrike(plain, nextKey),
+  );
+}
+
+function parseMarkdownAfterBold(s: string, nextKey: () => string): MarkdownChunk[] {
+  return splitByRegex(
+    s,
+    /\*\*([^*]+)\*\*|__([^_]+)__/g,
+    (match, key) => {
+      const inner = match[1] ?? match[2];
+      return (
+        <strong key={key} className="font-bold">
+          {markdownChunksToNode(parseMarkdownAfterItalic(inner, nextKey))}
+        </strong>
+      );
+    },
+    nextKey,
+    (plain) => parseMarkdownAfterItalic(plain, nextKey),
+  );
+}
+
+function parseMarkdownAfterInlineCode(s: string, nextKey: () => string): MarkdownChunk[] {
+  return splitByRegex(
+    s,
+    /`([^`\n]+)`/g,
+    (match, key) => (
+      <code
+        key={key}
+        className="rounded bg-zinc-200 dark:bg-zinc-800 px-1.5 py-0.5 text-sm font-mono text-rose-500 dark:text-rose-400"
+      >
+        {match[1]}
+      </code>
+    ),
+    nextKey,
+    (plain) => parseMarkdownAfterBold(plain, nextKey),
+  );
+}
+
+function parseMarkdownAfterCodeBlock(s: string, nextKey: () => string): MarkdownChunk[] {
+  return splitByRegex(
+    s,
+    /```([\s\S]*?)```/g,
+    (match, key) => (
+      <pre
+        key={key}
+        className="rounded-lg bg-zinc-200 dark:bg-zinc-800 p-3 text-sm font-mono my-1 overflow-x-auto"
+      >
+        <code>{match[1]}</code>
+      </pre>
+    ),
+    nextKey,
+    (plain) => parseMarkdownAfterInlineCode(plain, nextKey),
+  );
+}
+
+/**
+ * Converts markdown in a plain text segment to React elements.
+ * Order: code blocks → inline code → bold → italic → strikethrough → links.
+ * Inner spans recurse so later rules still apply (e.g. URLs inside bold).
+ */
+export function renderMarkdown(text: string, keyPrefix = 'md'): React.ReactNode {
+  if (text === '') {
+    return text;
+  }
+
+  let elIndex = 0;
+  const nextKey = () => `${keyPrefix}-${elIndex++}`;
+
+  const chunks = parseMarkdownAfterCodeBlock(text, nextKey);
+  return markdownChunksToNode(chunks);
+}
+
 export function renderMessageText(
   text: string,
   members: Pick<ServerMember, 'name'>[],
@@ -131,7 +306,14 @@ export function renderMessageText(
 ) {
   const tokens = findAllTokens(text, members);
   if (tokens.length === 0) {
-    return isEdited ? <><span className="break-words">{text}</span>{editedLabel()}</> : <span className="break-words">{text}</span>;
+    return isEdited ? (
+      <>
+        <span className="break-words">{renderMarkdown(text, 'msg')}</span>
+        {editedLabel()}
+      </>
+    ) : (
+      <span className="break-words">{renderMarkdown(text, 'msg')}</span>
+    );
   }
 
   const onlyEmojis = tokens.every(t => t.type !== 'mention') && 
@@ -144,7 +326,11 @@ export function renderMessageText(
 
   for (const token of tokens) {
     if (token.start > lastIndex) {
-      parts.push(<span key={`text-${lastIndex}`} className="break-words align-middle">{text.slice(lastIndex, token.start)}</span>);
+      parts.push(
+        <span key={`text-${lastIndex}`} className="break-words align-middle">
+          {renderMarkdown(text.slice(lastIndex, token.start), `text-${lastIndex}`)}
+        </span>,
+      );
     }
 
     if (token.type === 'mention') {
@@ -204,7 +390,11 @@ export function renderMessageText(
   }
 
   if (lastIndex < text.length) {
-    parts.push(<span key={`text-${lastIndex}`} className="break-words align-middle">{text.slice(lastIndex)}</span>);
+    parts.push(
+      <span key={`text-${lastIndex}`} className="break-words align-middle">
+        {renderMarkdown(text.slice(lastIndex), `text-${lastIndex}`)}
+      </span>,
+    );
   }
   
   if (isEdited) {

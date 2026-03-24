@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ReactNode, Ref } from 'react';
 import type {
   MessageSearchResult,
   ParsedSearchQuery,
@@ -8,6 +8,7 @@ import { buildSearchSnippet } from './search';
 
 interface ChatSearchBoxProps {
   hasAnchoredContext: boolean;
+  inputRef?: Ref<HTMLInputElement>;
   isLoading: boolean;
   onChange: (value: string) => void;
   onClearContext: () => void;
@@ -28,6 +29,7 @@ const hasFilterLabels: Record<SearchHasFilter, string> = {
 
 export function ChatSearchBox({
   hasAnchoredContext,
+  inputRef,
   isLoading,
   onChange,
   onClearContext,
@@ -67,6 +69,7 @@ export function ChatSearchBox({
             />
           </svg>
           <input
+            ref={inputRef}
             type="text"
             value={query}
             onChange={(event) => onChange(event.target.value)}

@@ -35,16 +35,15 @@ export function PinnedMessagesPanel({
   ) as ChatMessage[] | undefined;
 
   return (
-    <div className="absolute top-0 right-0 bottom-0 w-96 bg-white dark:bg-[#2B2D31] border-l border-zinc-200 dark:border-zinc-700 flex flex-col z-40 shadow-2xl">
+    <div className="absolute inset-0 md:left-auto md:right-0 md:top-0 md:bottom-0 w-full md:w-96 bg-white dark:bg-[#2B2D31] border-l border-zinc-200 dark:border-zinc-700 flex flex-col z-40 shadow-2xl">
       <div className="h-12 border-b border-zinc-200 dark:border-zinc-700 flex items-center justify-between px-4 shrink-0">
         <div className="flex items-center gap-2">
-          <svg className="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+          <svg className="w-5 h-5 text-emerald-500" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z" />
           </svg>
           <span className="font-bold text-sm">Pinned Messages</span>
         </div>
-        <button onClick={onClose} className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded transition text-zinc-500">
+        <button onClick={onClose} className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded transition text-zinc-500" aria-label="Close pinned messages">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
           </svg>
@@ -57,9 +56,8 @@ export function PinnedMessagesPanel({
         ) : pinnedMessages.length === 0 ? (
           <div className="p-6 text-center text-zinc-500 text-sm mt-8">
             <div className="flex justify-center mb-4">
-              <svg className="w-16 h-16 text-zinc-300 dark:text-zinc-600" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+              <svg className="w-16 h-16 text-zinc-300 dark:text-zinc-600" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z" />
               </svg>
             </div>
             Hmm, there are no pinned messages here yet.

@@ -133,6 +133,19 @@ export default defineSchema({
     format: v.union(v.literal("png"), v.literal("gif")),
   }).index("by_server_id", ["serverId"]),
 
+  reactions: defineTable({
+    messageId: v.id("messages"),
+    userId: v.id("users"),
+    emoji: v.string(),
+  })
+    .index("by_message_id", ["messageId"])
+    .index("by_message_id_and_emoji", ["messageId", "emoji"])
+    .index("by_message_id_and_user_id_and_emoji", [
+      "messageId",
+      "userId",
+      "emoji",
+    ]),
+
   notifications: defineTable({
     userId: v.id("users"),
     messageId: v.id("messages"),

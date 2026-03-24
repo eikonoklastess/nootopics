@@ -3,11 +3,13 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { useAppStore } from "../store/useAppStore";
 import { useState } from "react";
+import { toast } from "sonner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "./ui/dialog";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
 import { NextToUserButtonSettings } from "../features/chat/NextToUserButtonSettings";
+import ThemeToggle from "./ThemeToggle";
 
 export function NavigationSidebar() {
   const { activeServerId, activeSpace, setActiveServerId, showDirectMessages } =
@@ -50,7 +52,7 @@ export function NavigationSidebar() {
         setInviteCode("");
         setIsDialogOpen(false);
       } catch (error) {
-        console.error("Failed to join server:", error);
+        toast.error(error instanceof Error ? error.message : "Failed to join server. Check the invite code and try again.");
       }
     }
   };
@@ -69,7 +71,8 @@ export function NavigationSidebar() {
       <div className="flex-1 w-full flex flex-col items-center gap-y-4 overflow-y-auto hide-scrollbar">
         <Tooltip delayDuration={50}>
           <TooltipTrigger>
-            <div
+            <button
+              type="button"
               onClick={showDirectMessages}
               className="relative group flex items-center justify-center cursor-pointer"
             >
@@ -106,7 +109,7 @@ export function NavigationSidebar() {
                   </span>
                 )}
               </div>
-            </div>
+            </button>
           </TooltipTrigger>
           <TooltipContent side="right" className="font-semibold">
             Direct Messages
@@ -116,7 +119,7 @@ export function NavigationSidebar() {
         {visibleServers.map((server) => (
           <Tooltip key={server._id} delayDuration={50}>
             <TooltipTrigger>
-              <div onClick={() => setActiveServerId(server._id)} className="relative group flex items-center justify-center cursor-pointer">
+              <button type="button" onClick={() => setActiveServerId(server._id)} className="relative group flex items-center justify-center cursor-pointer">
                 <div className={`absolute -left-3 bg-primary rounded-r-full transition-all w-[4px] ${activeSpace === "server" && activeServerId === server._id ? "h-[36px]" : "h-[8px] group-hover:h-[20px]"}`} />
                 <div 
                   className={`h-[48px] w-[48px] rounded-[24px] group-hover:rounded-[16px] transition-all duration-200 overflow-hidden flex items-center justify-center font-bold text-lg shadow-sm ${activeSpace === "server" && activeServerId === server._id ? "bg-indigo-500 text-white rounded-[16px]" : "bg-white dark:bg-[#313338] text-zinc-700 dark:text-zinc-200 group-hover:bg-indigo-500 group-hover:text-white"}`}
@@ -127,7 +130,7 @@ export function NavigationSidebar() {
                     server.name.charAt(0).toUpperCase()
                   )}
                 </div>
-              </div>
+              </button>
             </TooltipTrigger>
             <TooltipContent side="right" className="font-semibold">{server.name}</TooltipContent>
           </Tooltip>
@@ -194,6 +197,9 @@ export function NavigationSidebar() {
             </div>
           </DialogContent>
         </Dialog>
+      </div>
+      <div className="pb-3 flex justify-center">
+        <ThemeToggle />
       </div>
     </div>
   );

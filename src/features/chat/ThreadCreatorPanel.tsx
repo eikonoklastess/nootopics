@@ -22,7 +22,7 @@ export function ThreadCreatorPanel({
   }
 
   return (
-    <div className="absolute top-0 right-0 bottom-0 w-96 bg-white dark:bg-[#2B2D31] border-l border-zinc-200 dark:border-zinc-700 flex flex-col z-40 shadow-2xl">
+    <div className="absolute inset-0 md:left-auto md:right-0 md:top-0 md:bottom-0 w-full md:w-96 bg-white dark:bg-[#2B2D31] border-l border-zinc-200 dark:border-zinc-700 flex flex-col z-40 shadow-2xl">
       <div className="h-12 border-b border-zinc-200 dark:border-zinc-700 flex items-center justify-between px-4 shrink-0">
         <div className="flex items-center gap-2">
           <svg className="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">

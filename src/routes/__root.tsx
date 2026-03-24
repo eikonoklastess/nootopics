@@ -4,6 +4,7 @@ import { TanStackDevtools } from '@tanstack/react-devtools'
 
 import ClerkProvider from '../integrations/clerk/provider'
 import { TooltipProvider } from '../components/ui/tooltip'
+import { Toaster } from '../components/ui/sonner'
 
 import appCss from '../styles.css?url'
 
@@ -45,6 +46,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
           <TooltipProvider>
             {children}
           </TooltipProvider>
+          <Toaster position="bottom-right" richColors />
           <TanStackDevtools
             config={{
               position: 'bottom-right',

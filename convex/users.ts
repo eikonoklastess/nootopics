@@ -33,6 +33,7 @@ export const listByServer = query({
               clerkId: user.clerkId,
               memberId: member._id,
               role: member.role,
+              status: user.status,
             }
           : null;
       }),

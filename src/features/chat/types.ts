@@ -9,6 +9,7 @@ export interface ServerMember {
   name: string;
   memberId?: Id<'members'>;
   role?: 'ADMIN' | 'MODERATOR' | 'GUEST';
+  status?: PresenceStatus;
 }
 
 export interface ChatUser {

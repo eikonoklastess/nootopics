@@ -2,7 +2,11 @@ import { useMutation, useQuery } from "convex/react";
 import { useState } from "react";
 import { api } from "../../convex/_generated/api";
 import { useAppStore } from "../store/useAppStore";
-import type { DirectConversationSummary, ServerMember } from "../features/chat/types";
+import type {
+  DirectConversationSummary,
+  ServerEmoji,
+  ServerMember,
+} from "../features/chat/types";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "./ui/dialog";
 import { Input } from "./ui/input";
@@ -64,6 +68,11 @@ export function ServerSidebar() {
       api.users.listDirectMessageCandidates,
       activeSpace === "direct" ? {} : "skip",
     ) as ServerMember[] | undefined) ?? [];
+  const serverEmojis =
+    (useQuery(
+      api.emojis.list,
+      activeSpace === "server" && activeServerId ? { serverId: activeServerId } : "skip",
+    ) as ServerEmoji[] | undefined) ?? [];
 
   const createChannel = useMutation(api.channels.create);
   const createDirectConversation = useMutation(api.directMessages.createOrGet);
@@ -76,6 +85,7 @@ export function ServerSidebar() {
   const [newEmojiName, setNewEmojiName] = useState("");
   const [emojiFile, setEmojiFile] = useState<File | null>(null);
   const [isUploadingEmoji, setIsUploadingEmoji] = useState(false);
+  const [emojiError, setEmojiError] = useState<string | null>(null);
 
   const generateUploadUrl = useMutation(api.emojis.generateUploadUrl);
   const createEmoji = useMutation(api.emojis.create);
@@ -119,14 +129,21 @@ export function ServerSidebar() {
     if (!activeServerId || !newEmojiName.trim() || !emojiFile) return;
     
     setIsUploadingEmoji(true);
+    setEmojiError(null);
     try {
-      const uploadUrl = await generateUploadUrl();
+      const uploadUrl = await generateUploadUrl({ serverId: activeServerId });
       const result = await fetch(uploadUrl, {
         method: "POST",
         body: emojiFile,
         headers: { "Content-Type": emojiFile.type }
       });
+      if (!result.ok) {
+        throw new Error("Emoji upload failed.");
+      }
       const { storageId } = await result.json();
+      if (!storageId) {
+        throw new Error("Emoji upload failed.");
+      }
 
       await createEmoji({
         serverId: activeServerId,
@@ -138,7 +155,9 @@ export function ServerSidebar() {
       setNewEmojiName("");
       setEmojiFile(null);
     } catch (error) {
-      console.error("Failed to upload emoji:", error);
+      setEmojiError(
+        error instanceof Error ? error.message : "Failed to upload emoji.",
+      );
     } finally {
       setIsUploadingEmoji(false);
     }
@@ -355,7 +374,7 @@ export function ServerSidebar() {
         </Dialog>
 
         {/* Uncategorized Channels */}
-        {channels.filter((c: any) => !c.categoryId).map((channel: any) => (
+        {channels.filter((channel) => !channel.categoryId).map((channel) => (
           <div
             key={channel._id}
             onClick={() => setActiveChannelId(channel._id)}
@@ -377,9 +396,9 @@ export function ServerSidebar() {
         ))}
 
         {/* Categories */}
-        {categories.map((category: any) => {
+        {categories.map((category) => {
           const isCollapsed = collapsedCategories.has(category._id);
-          const categoryChannels = channels.filter((c: any) => c.categoryId === category._id);
+          const categoryChannels = channels.filter((channel) => channel.categoryId === category._id);
           return (
             <div key={category._id} className="mt-4">
               <div 
@@ -398,7 +417,7 @@ export function ServerSidebar() {
                 </button>
               </div>
               
-              {!isCollapsed && categoryChannels.map((channel: any) => (
+              {!isCollapsed && categoryChannels.map((channel) => (
                 <div
                   key={channel._id}
                   onClick={() => setActiveChannelId(channel._id)}
@@ -437,7 +456,12 @@ export function ServerSidebar() {
               <DialogHeader>
                 <DialogTitle className="text-2xl font-bold">Upload Custom Emoji</DialogTitle>
               </DialogHeader>
-              <div className="space-y-4 mt-2">
+                <div className="space-y-4 mt-2">
+                  {emojiError && (
+                    <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-200">
+                      {emojiError}
+                    </div>
+                  )}
                 <div className="space-y-2">
                   <label className="text-xs font-bold uppercase text-zinc-600 dark:text-zinc-400">Emoji Name</label>
                   <div className="relative">
@@ -472,7 +496,23 @@ export function ServerSidebar() {
             </DialogContent>
           </Dialog>
 
-          {/* List the currently uploaded server emojis if we wanted to, but skipping for brevity */}
+          {serverEmojis.length > 0 && (
+            <div className="space-y-2 px-2">
+              {serverEmojis.map((emoji) => (
+                <div
+                  key={emoji._id}
+                  className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-zinc-600 dark:text-zinc-300"
+                >
+                  <img
+                    alt=""
+                    className="h-5 w-5 rounded-[2px] object-contain"
+                    src={emoji.url ?? undefined}
+                  />
+                  <span className="font-medium">:{emoji.name}:</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <Dialog open={isCreateCategoryOpen} onOpenChange={setIsCreateCategoryOpen}>

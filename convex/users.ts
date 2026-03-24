@@ -5,6 +5,7 @@ import {
   requireCurrentUserForMutation,
   requireServerMembership,
 } from "./lib/auth";
+import { resolveUsersById } from "./lib/messages";
 
 const notificationSettingsValidator = v.object({
   desktop: v.union(v.literal("ALL"), v.literal("MENTIONS"), v.literal("NONE")),
@@ -102,9 +103,27 @@ export const listDirectMessageCandidates = query({
   handler: async (ctx) => {
     const { user: currentUser } = await requireCurrentUser(ctx);
 
-    const users = await ctx.db.query("users").take(100);
-    return users
-      .filter((user) => user._id !== currentUser._id)
+    const memberships = await ctx.db
+      .query("members")
+      .withIndex("by_user_id", (q) => q.eq("userId", currentUser._id))
+      .take(100);
+    const candidateIds = new Set<typeof currentUser._id>();
+
+    for (const membership of memberships) {
+      const serverMembers = await ctx.db
+        .query("members")
+        .withIndex("by_server_id", (q) => q.eq("serverId", membership.serverId))
+        .take(200);
+      for (const serverMember of serverMembers) {
+        if (serverMember.userId !== currentUser._id) {
+          candidateIds.add(serverMember.userId);
+        }
+      }
+    }
+
+    const users = await resolveUsersById(ctx, [...candidateIds].slice(0, 100));
+    return [...users.values()]
+      .sort((left, right) => left.name.localeCompare(right.name))
       .map((user) => ({
         _id: user._id,
         clerkId: user.clerkId,

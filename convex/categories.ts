@@ -9,7 +9,7 @@ export const list = query({
     return await ctx.db
       .query("categories")
       .withIndex("by_server_id", (q) => q.eq("serverId", args.serverId))
-      .collect();
+      .take(100);
   },
 });
 
@@ -57,9 +57,10 @@ export const remove = mutation({
     // update all channels in this category to lose their category
     const channels = await ctx.db
       .query("channels")
-      .withIndex("by_server_id", (q) => q.eq("serverId", category.serverId))
-      .filter((q) => q.eq(q.field("categoryId"), args.categoryId))
-      .collect();
+      .withIndex("by_server_id_and_category_id", (q) =>
+        q.eq("serverId", category.serverId).eq("categoryId", args.categoryId),
+      )
+      .take(200);
       
     for (const channel of channels) {
       await ctx.db.patch(channel._id, { categoryId: undefined });

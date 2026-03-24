@@ -16,6 +16,10 @@ interface ChannelSettingsModalProps {
 export function ChannelSettingsModal({ channelId, serverId, isOpen, onClose }: ChannelSettingsModalProps) {
   const [name, setName] = useState("");
   const [categoryId, setCategoryId] = useState<Id<"categories"> | "">("");
+  const parseCategoryValue = (value: string): Id<"categories"> | "" => {
+    return value ? (value as Id<"categories">) : "";
+  };
+
 
   const channels = useQuery(api.channels.list, serverId ? { serverId } : "skip") ?? [];
   const categories = useQuery(api.categories.list, serverId ? { serverId } : "skip") ?? [];
@@ -76,7 +80,7 @@ export function ChannelSettingsModal({ channelId, serverId, isOpen, onClose }: C
             <label className="text-xs font-bold uppercase text-zinc-500">Category</label>
             <select
               value={categoryId}
-              onChange={(e) => setCategoryId(e.target.value as any)}
+              onChange={(e) => setCategoryId(parseCategoryValue(e.target.value))}
               className="w-full bg-zinc-100 dark:bg-[#1E1F22] text-sm p-3 border-none rounded-md outline-none cursor-pointer focus:ring-2 focus:ring-indigo-500"
             >
               <option value="">No Category</option>

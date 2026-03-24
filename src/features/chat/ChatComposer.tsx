@@ -4,12 +4,13 @@ import { api } from '../../../convex/_generated/api';
 import { useAppStore } from '../../store/useAppStore';
 import { EmojiPicker } from './EmojiPicker';
 import { useFileUpload, type PendingFile } from '../../hooks/useFileUpload';
-import type { ServerMember } from './types';
+import type { ServerEmoji, ServerMember } from './types';
 import { getFilteredMembers } from './utils';
 import emojiData from '@emoji-mart/data';
 
 interface ChatComposerProps {
   content: string;
+  errorMessage?: string | null;
   fileUpload: ReturnType<typeof useFileUpload>;
   isUploading: boolean;
   onContentChange: (value: string) => void;
@@ -76,6 +77,7 @@ function FilePreviewStrip({
 
 export function ChatComposer({
   content,
+  errorMessage,
   fileUpload,
   isUploading,
   onContentChange,
@@ -103,24 +105,60 @@ export function ChatComposer({
     activeSpace === "server" && activeServerId
       ? { serverId: activeServerId }
       : "skip"
-  ) ?? [];
+  ) as ServerEmoji[] | undefined;
 
   const filteredMembers = getFilteredMembers(serverMembers, mentionQuery);
-  
+
+  type CustomEmojiOption = {
+    format: 'gif' | 'png';
+    id: string;
+    isCustom: true;
+    name: string;
+    storageId: string;
+    url?: string | null;
+  };
+  type StandardEmojiOption = {
+    id: string;
+    isCustom: false;
+    name: string;
+    native: string;
+  };
+  type EmojiOption = CustomEmojiOption | StandardEmojiOption;
+  type EmojiMartData = {
+    emojis?: Record<string, { id: string; keywords?: string[]; skins: { native: string }[] }>;
+  };
+
   const queryLower = emojiQuery.toLowerCase();
-  const customMatches = serverEmojis
-    .filter((e: any) => e.name.toLowerCase().includes(queryLower))
-    .map((e: any) => ({ id: e._id, name: e.name, isCustom: true, storageId: e.storageId, format: e.format }));
-  
-  const standardEmojis = Object.values((emojiData as any).emojis || {});
+  const customMatches: CustomEmojiOption[] = (serverEmojis ?? [])
+    .filter((emoji) => emoji.name.toLowerCase().includes(queryLower))
+    .map((emoji) => ({
+      id: String(emoji._id),
+      name: emoji.name,
+      isCustom: true,
+      storageId: String(emoji.storageId),
+      format: emoji.format,
+      url: emoji.url,
+    }));
+
+  const standardEmojis = Object.values((emojiData as EmojiMartData).emojis || {});
   const standardMatches = standardEmojis
-    .filter((e: any) => e.id.includes(queryLower) || (e.keywords && e.keywords.some((k: string) => k.includes(queryLower))))
+    .filter(
+      (emoji) =>
+        emoji.id.includes(queryLower) ||
+        emoji.keywords?.some((keyword) => keyword.includes(queryLower)),
+    )
     .slice(0, 10)
-    .map((e: any) => ({ id: e.id, name: e.id, isCustom: false, native: e.skins[0].native }));
+    .map(
+      (emoji): StandardEmojiOption => ({
+        id: emoji.id,
+        name: emoji.id,
+        isCustom: false,
+        native: emoji.skins[0]?.native ?? '',
+      }),
+    )
+    .filter((emoji) => emoji.native);
 
-  const filteredEmojis = [...customMatches, ...standardMatches].slice(0, 8);
-
-  const convexSiteUrl = import.meta.env.VITE_CONVEX_URL.replace('.convex.cloud', '.convex.site');
+  const filteredEmojis: EmojiOption[] = [...customMatches, ...standardMatches].slice(0, 8);
 
   const insertMention = (name: string) => {
     const atIndex = content.lastIndexOf('@');
@@ -129,7 +167,7 @@ export function ChatComposer({
     inputRef.current?.focus();
   };
 
-  const insertEmojiAutocomplete = (emoji: any) => {
+  const insertEmojiAutocomplete = (emoji: EmojiOption) => {
     const colonIndex = content.lastIndexOf(':');
     if (emoji.isCustom) {
       const prefix = emoji.format === 'gif' ? '<a' : '<';
@@ -176,6 +214,11 @@ export function ChatComposer({
         onSubmit={onSend}
         className="bg-[#EBEDEF] dark:bg-[#383A40] rounded-2xl text-sm shadow-inner border border-zinc-200 dark:border-zinc-700/50 overflow-hidden"
       >
+        {errorMessage && (
+          <div className="border-b border-rose-200 bg-rose-50 px-4 py-2 text-xs text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-200">
+            {errorMessage}
+          </div>
+        )}
         <FilePreviewStrip
           pendingFiles={fileUpload.pendingFiles}
           onRemoveFile={fileUpload.removeFile}
@@ -390,7 +433,7 @@ export function ChatComposer({
           <div className="px-3 py-1.5 text-[11px] font-bold uppercase text-zinc-500 dark:text-zinc-400">
             Matching Emojis
           </div>
-          {filteredEmojis.map((emoji: any, index: number) => (
+          {filteredEmojis.map((emoji, index) => (
             <button
               key={emoji.id}
               type="button"
@@ -404,7 +447,7 @@ export function ChatComposer({
             >
               {emoji.isCustom ? (
                 <img
-                  src={`${convexSiteUrl}/getEmoji?storageId=${emoji.storageId}`}
+                  src={emoji.url ?? undefined}
                   className="w-6 h-6 rounded-[2px] object-contain"
                   alt=""
                 />

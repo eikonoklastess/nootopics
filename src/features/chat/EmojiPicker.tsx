@@ -3,24 +3,30 @@ import Picker from '@emoji-mart/react';
 import { useQuery } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import { useAppStore } from '../../store/useAppStore';
+import type { ServerEmoji } from './types';
 
 interface EmojiPickerProps {
   onSelect: (value: string) => void;
 }
 
+interface EmojiSelection {
+  id: string;
+  name: string;
+  native?: string;
+}
+
 export function EmojiPicker({ onSelect }: EmojiPickerProps) {
   const { activeServerId, activeSpace } = useAppStore();
 
-  const serverEmojis = useQuery(
-    api.emojis.list,
-    activeSpace === "server" && activeServerId
-      ? { serverId: activeServerId }
-      : "skip"
-  );
+  const serverEmojis =
+    (useQuery(
+      api.emojis.list,
+      activeSpace === "server" && activeServerId
+        ? { serverId: activeServerId }
+        : "skip"
+    ) as ServerEmoji[] | undefined) ?? [];
 
-  const convexSiteUrl = import.meta.env.VITE_CONVEX_URL.replace('.convex.cloud', '.convex.site');
-
-  const customEmojis = serverEmojis && serverEmojis.length > 0 ? [
+  const customEmojis = serverEmojis.length > 0 ? [
     {
       id: 'custom_server_emojis',
       name: 'Server Emojis',
@@ -28,19 +34,15 @@ export function EmojiPicker({ onSelect }: EmojiPickerProps) {
         id: e.storageId,
         name: e.name,
         keywords: [e.name],
-        skins: [{ src: `${convexSiteUrl}/getEmoji?storageId=${e.storageId}` }]
+        skins: [{ src: e.url ?? "" }]
       }))
     }
   ] : [];
 
-  const handleEmojiSelect = (emoji: any) => {
+  const handleEmojiSelect = (emoji: EmojiSelection) => {
     if (emoji.native) {
-      // Standard unicode emoji
       onSelect(emoji.native);
     } else {
-      // Custom emoji
-      // emoji.id is exactly what we supplied: the storageId.
-      // emoji.name is the name.
       onSelect(`<:${emoji.name}:${emoji.id}>`);
     }
   };

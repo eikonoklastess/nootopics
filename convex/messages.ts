@@ -1,11 +1,12 @@
 import { mutation, query } from "./_generated/server";
-import type { Doc } from "./_generated/dataModel";
-import type { QueryCtx } from "./_generated/server";
+import type { Doc, Id } from "./_generated/dataModel";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { v } from "convex/values";
 import {
   requireConversationAccess,
   requireCurrentUserForMutation,
   requireMessageOwner,
+  requireServerModerator,
 } from "./lib/auth";
 import {
   getReplyCount,
@@ -114,10 +115,14 @@ export const send = mutation({
         lastMessageTime: now,
       });
 
-      const uniqueMentionedUserIds = Array.from(new Set(args.mentions ?? [])).filter(
-        (userId) => userId !== access.user._id,
+      const validMentionedUserIds = await getValidMentionedUserIdsForServer(
+        ctx,
+        access.channel.serverId,
+        Array.from(new Set(args.mentions ?? [])).filter(
+          (userId) => userId !== access.user._id,
+        ),
       );
-      for (const userId of uniqueMentionedUserIds) {
+      for (const userId of validMentionedUserIds) {
         const mentionedUser = await ctx.db.get(userId);
         if (!mentionedUser) {
           continue;
@@ -195,12 +200,13 @@ export const pin = mutation({
     if (!message) {
       throw new Error("Message not found");
     }
-    
-    // Make sure user has access to this conversation
+
     if (message.channelId) {
-      await requireConversationAccess(ctx, { channelId: message.channelId });
+      await requireChannelModerationForMessage(ctx, message);
     } else if (message.directConversationId) {
       await requireConversationAccess(ctx, { directConversationId: message.directConversationId });
+    } else {
+      throw new Error("Message is missing its parent conversation");
     }
 
     if (message.deleted) {
@@ -222,12 +228,13 @@ export const unpin = mutation({
     if (!message) {
       throw new Error("Message not found");
     }
-    
-    // Make sure user has access to this conversation
+
     if (message.channelId) {
-      await requireConversationAccess(ctx, { channelId: message.channelId });
+      await requireChannelModerationForMessage(ctx, message);
     } else if (message.directConversationId) {
       await requireConversationAccess(ctx, { directConversationId: message.directConversationId });
+    } else {
+      throw new Error("Message is missing its parent conversation");
     }
 
     await ctx.db.patch(args.messageId, {
@@ -250,19 +257,17 @@ export const listPinned = query({
           q.eq("channelId", access.channel._id).eq("pinned", true)
         )
         .order("desc")
-        .collect();
+        .take(100);
     } else {
-      // For direct conversations, we don't have an index, so we filter.
-      // Usually direct conversations are small enough 
-      // or we can just add an index if needed.
       pinnedMessages = await ctx.db
         .query("messages")
-        .withIndex("by_direct_conversation_id", (q) =>
-          q.eq("directConversationId", access.directConversation._id)
+        .withIndex("by_direct_conversation_id_and_pinned", (q) =>
+          q
+            .eq("directConversationId", access.directConversation._id)
+            .eq("pinned", true)
         )
-        .filter((q) => q.eq(q.field("pinned"), true))
         .order("desc")
-        .collect();
+        .take(100);
     }
     
     return await serializeTopLevelMessages(ctx, pinnedMessages);
@@ -363,4 +368,42 @@ function getMessageLocation(
         kind: "direct",
         directConversationId: access.directConversation._id,
       };
+}
+
+async function getValidMentionedUserIdsForServer(
+  ctx: QueryCtx | MutationCtx,
+  serverId: Id<"servers">,
+  userIds: Id<"users">[],
+) {
+  if (userIds.length === 0) {
+    return [];
+  }
+
+  const serverMembers = await ctx.db
+    .query("members")
+    .withIndex("by_server_id", (q) => q.eq("serverId", serverId))
+    .take(200);
+  const validUserIds = new Set(serverMembers.map((member) => member.userId));
+
+  return userIds.filter((userId) => validUserIds.has(userId));
+}
+
+async function requireChannelModerationForMessage(
+  ctx: MutationCtx,
+  message: Doc<"messages">,
+) {
+  if (!message.channelId) {
+    throw new Error("Message is not in a channel");
+  }
+
+  if (message.serverId) {
+    await requireServerModerator(ctx, message.serverId);
+    return;
+  }
+
+  const channel = await ctx.db.get(message.channelId);
+  if (!channel) {
+    throw new Error("Channel not found");
+  }
+  await requireServerModerator(ctx, channel.serverId);
 }

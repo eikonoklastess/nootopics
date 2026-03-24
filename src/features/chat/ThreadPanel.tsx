@@ -1,24 +1,28 @@
 import { useEffect, useRef } from 'react';
-import type { ChatMessage, ThreadReply } from './types';
-import { formatThreadMessage } from './utils';
+import type { ChatMessage, ServerMember, ThreadReply } from './types';
+import { renderMessageText } from './utils';
 
 interface ThreadPanelProps {
   activeThread: ChatMessage;
+  customEmojiUrls: Record<string, string | null | undefined>;
   onClose: () => void;
   onReplyChange: (value: string) => void;
   onReplySubmit: (event: React.FormEvent) => void;
   replies: ThreadReply[];
   replyValue: string;
+  serverMembers: ServerMember[];
   targetReplyId?: ThreadReply['_id'] | null;
 }
 
 export function ThreadPanel({
   activeThread,
+  customEmojiUrls,
   onClose,
   onReplyChange,
   onReplySubmit,
   replies,
   replyValue,
+  serverMembers,
   targetReplyId = null,
 }: ThreadPanelProps) {
   const replyRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -71,7 +75,14 @@ export function ThreadPanel({
               </span>
             </div>
             <p className="text-sm text-zinc-700 dark:text-zinc-300">
-              {formatThreadMessage(activeThread)}
+              {activeThread.deleted
+                ? 'Message deleted'
+                : renderMessageText(
+                    activeThread.content,
+                    serverMembers,
+                    customEmojiUrls,
+                    !!activeThread.isEdited,
+                  )}
             </p>
           </div>
         </div>
@@ -103,7 +114,14 @@ export function ThreadPanel({
                   </span>
                 </div>
                 <p className="text-[13px] text-zinc-700 dark:text-zinc-300">
-                  {reply.deleted ? 'Message deleted' : reply.content}
+                  {reply.deleted
+                    ? 'Message deleted'
+                    : renderMessageText(
+                        reply.content,
+                        serverMembers,
+                        customEmojiUrls,
+                        !!reply.isEdited,
+                      )}
                 </p>
               </div>
             </div>

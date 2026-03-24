@@ -3,10 +3,11 @@ import { v } from "convex/values";
 import { requireServerMembership, requireServerModerator } from "./lib/auth";
 
 export const generateUploadUrl = mutation({
-  args: {},
-  handler: async (ctx) => {
-    // You don't necessarily need server membership just to get an upload URL,
-    // but the actual creation mutation will check auth.
+  args: {
+    serverId: v.id("servers"),
+  },
+  handler: async (ctx, args) => {
+    await requireServerModerator(ctx, args.serverId);
     return await ctx.storage.generateUploadUrl();
   },
 });
@@ -45,9 +46,14 @@ export const list = query({
     const emojis = await ctx.db
       .query("emojis")
       .withIndex("by_server_id", (q) => q.eq("serverId", args.serverId))
-      .collect();
+      .take(200);
 
-    return emojis;
+    return await Promise.all(
+      emojis.map(async (emoji) => ({
+        ...emoji,
+        url: await ctx.storage.getUrl(emoji.storageId),
+      })),
+    );
   },
 });
 

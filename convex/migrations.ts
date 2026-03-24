@@ -1,26 +1,15 @@
 import { internal } from "./_generated/api";
-import { internalMutation, mutation } from "./_generated/server";
+import { internalMutation } from "./_generated/server";
 import { paginationOptsValidator } from "convex/server";
-import { requireCurrentUserForMutation } from "./lib/auth";
 import {
   countThreadReplies,
   countTopLevelMessages,
   getParentMessageId,
 } from "./lib/messages";
 
-export const runBackfill = mutation({
+export const runBackfill = internalMutation({
   args: {},
   handler: async (ctx) => {
-    const { user } = await requireCurrentUserForMutation(ctx);
-
-    const memberships = await ctx.db
-      .query("members")
-      .withIndex("by_user_id", (q) => q.eq("userId", user._id))
-      .collect();
-    if (!memberships.some((membership) => membership.role === "ADMIN")) {
-      throw new Error("Forbidden");
-    }
-
     await ctx.scheduler.runAfter(0, internal.migrations.backfillMessagesBatch, {
       paginationOpts: { cursor: null, numItems: 100 },
     });

@@ -21,6 +21,7 @@ import { useDesktopNotifications } from './useDesktopNotifications';
 import type {
   ChatMessage,
   MessageSearchResult,
+  ServerEmoji,
   ServerMember,
   ThreadReply,
 } from './types';
@@ -66,6 +67,8 @@ export function ChatPage() {
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [flashMessageId, setFlashMessageId] = useState<Id<'messages'> | null>(null);
   const [flashReplyId, setFlashReplyId] = useState<Id<'messages'> | null>(null);
+  const [showMobileNavigation, setShowMobileNavigation] = useState(false);
+  const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   const [pendingReplyJumpId, setPendingReplyJumpId] = useState<Id<'messages'> | null>(
     null,
   );
@@ -123,6 +126,14 @@ export function ChatPage() {
       activeSpace === 'server' && activeServerId ? { serverId: activeServerId } : 'skip',
     ) ?? [];
   const activeChannel = channels.find((channel) => channel._id === activeChannelId);
+  const serverEmojis =
+    (useQuery(
+      api.emojis.list,
+      activeSpace === 'server' && activeServerId ? { serverId: activeServerId } : 'skip',
+    ) as ServerEmoji[] | undefined) ?? [];
+  const customEmojiUrls = Object.fromEntries(
+    serverEmojis.map((emoji) => [String(emoji.storageId), emoji.url ?? null] as const),
+  );
   const directConversation =
     (useQuery(
       api.directMessages.get,
@@ -237,6 +248,11 @@ export function ChatPage() {
   }, [activeConversationKey]);
 
   useEffect(() => {
+    setShowMobileNavigation(false);
+    setShowMobileSidebar(false);
+  }, [activeChannelId, activeDirectConversationId, activeServerId, activeSpace]);
+
+  useEffect(() => {
     setSearchQuery('');
     setDebouncedSearchQuery('');
     setPendingReplyJumpId(null);
@@ -324,7 +340,12 @@ export function ChatPage() {
       return;
     }
 
-    const uploadedFiles = await fileUpload.uploadAll();
+    let uploadedFiles;
+    try {
+      uploadedFiles = await fileUpload.uploadAll();
+    } catch {
+      return;
+    }
     const mentionIds =
       findAllTokens(content.trim(), conversationMembers)
         .filter((token) => token.type === 'mention')
@@ -504,6 +525,34 @@ export function ChatPage() {
     <div className="flex h-full w-full overflow-hidden antialiased text-black dark:text-white bg-white dark:bg-[#313338]">
       <PresenceSync />
 
+      {showMobileNavigation && (
+        <>
+          <button
+            aria-label="Close navigation"
+            className="fixed inset-0 z-40 bg-black/50 md:hidden"
+            onClick={() => setShowMobileNavigation(false)}
+            type="button"
+          />
+          <div className="fixed inset-y-0 left-0 z-50 flex w-[72px] md:hidden">
+            <NavigationSidebar />
+          </div>
+        </>
+      )}
+
+      {showMobileSidebar && (
+        <>
+          <button
+            aria-label="Close sidebar"
+            className="fixed inset-0 z-40 bg-black/50 md:hidden"
+            onClick={() => setShowMobileSidebar(false)}
+            type="button"
+          />
+          <div className="fixed inset-y-0 left-0 z-50 flex w-60 md:hidden">
+            <ServerSidebar />
+          </div>
+        </>
+      )}
+
       <div className="hidden md:flex h-full w-[72px] z-30 flex-col fixed inset-y-0">
         <NavigationSidebar />
       </div>
@@ -519,6 +568,32 @@ export function ChatPage() {
         onDragOver={handleDragOver}
         onDrop={handleDrop}
       >
+        <div className="flex h-12 items-center justify-between border-b border-neutral-200 px-3 shadow-sm dark:border-neutral-800 md:hidden">
+          <button
+            className="rounded-md p-2 text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-800 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+            onClick={() => setShowMobileNavigation(true)}
+            type="button"
+          >
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+          <div className="min-w-0 px-3 text-center text-sm font-semibold">
+            <span className="block truncate">
+              {activeConversationTarget ? activeConversationLabel : 'Nootopics'}
+            </span>
+          </div>
+          <button
+            className="rounded-md p-2 text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-800 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+            onClick={() => setShowMobileSidebar(true)}
+            type="button"
+          >
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 5.25h18M3 12h18M3 18.75h18" />
+            </svg>
+          </button>
+        </div>
+
         {isDragging && (
           <div className="absolute inset-0 z-50 bg-indigo-500/10 border-2 border-dashed border-indigo-500 rounded-xl flex items-center justify-center pointer-events-none">
             <div className="text-center">
@@ -538,8 +613,8 @@ export function ChatPage() {
           </div>
         ) : (
           <>
-            <header className="h-12 border-b border-neutral-200 dark:border-neutral-800 flex items-center px-4 font-semibold shrink-0 shadow-sm z-10 bg-white dark:bg-[#313338]">
-              <div className="flex min-w-0 items-center gap-2">
+            <header className="min-h-12 border-b border-neutral-200 dark:border-neutral-800 flex flex-wrap items-center gap-y-2 px-4 py-2 font-semibold shrink-0 shadow-sm z-10 bg-white dark:bg-[#313338] md:h-12 md:flex-nowrap md:py-0">
+              <div className="hidden min-w-0 items-center gap-2 md:flex">
                 <span className="text-zinc-500">
                   {activeSpace === 'direct' ? '@' : '#'}
                 </span>
@@ -547,7 +622,7 @@ export function ChatPage() {
               </div>
 
               <button
-                className="relative ml-3 rounded-full p-2 text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-800 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+                className="relative ml-auto rounded-full p-2 text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-800 dark:hover:bg-zinc-800 dark:hover:text-zinc-100 md:ml-3"
                 onClick={() => setShowNotifications((prev) => !prev)}
                 title="Notifications"
                 type="button"
@@ -561,14 +636,14 @@ export function ChatPage() {
               </button>
 
               {activeSpace === 'server' && (
-                <div className="ml-auto w-full max-w-xl pl-4 flex items-center gap-2">
+                <div className="w-full md:ml-auto md:max-w-xl md:pl-4">
                   <button
                     onClick={() => {
                       setShowPinnedMessages((prev) => !prev);
                       setActiveThread(null);
                       setShowThreadCreator(false);
                     }}
-                    className={`p-2 shrink-0 rounded-full transition ${showPinnedMessages ? 'bg-zinc-200 dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100' : 'text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}
+                    className={`mr-2 inline-flex p-2 shrink-0 rounded-full transition ${showPinnedMessages ? 'bg-zinc-200 dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100' : 'text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}
                     title="Pinned Messages"
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -576,7 +651,7 @@ export function ChatPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
                     </svg>
                   </button>
-                  <div className="flex-1 w-full min-w-0">
+                  <div className="inline-block w-[calc(100%-3rem)] min-w-0 align-middle md:w-[calc(100%-3.5rem)]">
                     <ChatSearchBox
                       hasAnchoredContext={hasAnchoredMessageContext}
                       isLoading={isSearchLoading}
@@ -602,6 +677,7 @@ export function ChatPage() {
                 setEditingId(null);
                 setEditContent('');
               }}
+              customEmojiUrls={customEmojiUrls}
               currentUserClerkId={clerkUser?.id}
               editContent={editContent}
               editingId={editingId}
@@ -655,6 +731,7 @@ export function ChatPage() {
 
             <ChatComposer
               content={content}
+              errorMessage={fileUpload.error}
               fileUpload={fileUpload}
               isUploading={fileUpload.isUploading}
               onContentChange={setContent}
@@ -673,6 +750,7 @@ export function ChatPage() {
             {activeThread && (
               <ThreadPanel
                 activeThread={activeThread}
+                customEmojiUrls={customEmojiUrls}
                 onClose={() => {
                   setPendingReplyJumpId(null);
                   setFlashReplyId(null);
@@ -683,6 +761,7 @@ export function ChatPage() {
                 onReplySubmit={handleThreadReply}
                 replies={threadReplies}
                 replyValue={threadContent}
+                serverMembers={conversationMembers}
                 targetReplyId={flashReplyId}
               />
             )}
@@ -691,6 +770,7 @@ export function ChatPage() {
               <PinnedMessagesPanel
                 activeChannelId={activeConversationTarget?.channelId}
                 activeDirectConversationId={activeConversationTarget?.directConversationId}
+                customEmojiUrls={customEmojiUrls}
                 onClose={() => setShowPinnedMessages(false)}
                 onJumpToMessage={(messageId) => {
                   setMessageContext({

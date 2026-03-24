@@ -34,6 +34,14 @@ export interface ChatAttachment {
   url?: string | null;
 }
 
+export interface ServerEmoji {
+  _id: Id<'emojis'>;
+  format: 'gif' | 'png';
+  name: string;
+  storageId: Id<'_storage'>;
+  url?: string | null;
+}
+
 export interface ChatMessage {
   _creationTime: number;
   _id: Id<'messages'>;

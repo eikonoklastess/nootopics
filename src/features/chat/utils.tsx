@@ -3,12 +3,17 @@ import type { ChatMessage, ServerMember } from './types';
 
 import emojiRegex from 'emoji-regex';
 
+type TokenData = {
+  id?: string;
+  name: string;
+};
+
 export interface TokenMatch {
   start: number;
   end: number;
   type: 'mention' | 'emoji' | 'custom_emoji' | 'animated_emoji';
   content: string;
-  data?: any;
+  data?: TokenData;
 }
 
 export function findMentionMatches(
@@ -121,6 +126,7 @@ function twemojiCodePoint(codePointStr: string) {
 export function renderMessageText(
   text: string,
   members: Pick<ServerMember, 'name'>[],
+  customEmojiUrls: Record<string, string | null | undefined> = {},
   isEdited?: boolean,
 ) {
   const tokens = findAllTokens(text, members);
@@ -129,10 +135,9 @@ export function renderMessageText(
   }
 
   const onlyEmojis = tokens.every(t => t.type !== 'mention') && 
-                     text.replace(/\\s/g, '').length === tokens.reduce((acc, t) => acc + t.content.length, 0);
+                     text.replace(/\s/g, '').length === tokens.reduce((acc, t) => acc + t.content.length, 0);
 
   const emojiSizeClass = onlyEmojis && tokens.length <= 5 ? "w-12 h-12" : "w-[22px] h-[22px]";
-  const convexSiteUrl = import.meta.env.VITE_CONVEX_URL.replace('.convex.cloud', '.convex.site');
 
   const parts: ReactNode[] = [];
   let lastIndex = 0;
@@ -143,12 +148,13 @@ export function renderMessageText(
     }
 
     if (token.type === 'mention') {
+      const mentionName = token.data?.name ?? token.content.slice(1);
       parts.push(
         <span
           key={`mention-${token.start}`}
           className="bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 font-semibold rounded px-1 py-0.5 text-[14px] align-middle"
         >
-          @{token.data.name}
+          @{mentionName}
         </span>
       );
     } else if (token.type === 'emoji') {
@@ -160,26 +166,38 @@ export function renderMessageText(
           alt={token.content}
           draggable={false}
           className={`${emojiSizeClass} inline-block align-middle mx-[1px]`}
-          onError={(e) => {
-            (e.target as HTMLImageElement).style.display = 'none';
-            if (e.target && (e.target as any).nextSibling) {
-               (e.target as any).nextSibling.style.display = 'inline';
+          onError={(event) => {
+            event.currentTarget.style.display = 'none';
+            const fallback = event.currentTarget.nextElementSibling;
+            if (fallback instanceof HTMLElement) {
+              fallback.style.display = 'inline';
             }
           }}
         />
       );
       parts.push(<span key={`emoji-fallback-${token.start}`} style={{display: 'none'}}>{token.content}</span>);
     } else if (token.type === 'custom_emoji' || token.type === 'animated_emoji') {
-      const url = `${convexSiteUrl}/getEmoji?storageId=${token.data.id}`;
-      parts.push(
-        <img
-          key={`custom-${token.start}`}
-          src={url}
-          alt={`:${token.data.name}:`}
-          draggable={false}
-          className={`${emojiSizeClass} inline-block align-middle mx-[1px] object-contain rounded-[2px]`}
-        />
-      );
+      const url = token.data?.id ? customEmojiUrls[token.data.id] : null;
+      if (url) {
+        parts.push(
+          <img
+            key={`custom-${token.start}`}
+            src={url}
+            alt={`:${token.data?.name ?? 'emoji'}:`}
+            draggable={false}
+            className={`${emojiSizeClass} inline-block align-middle mx-[1px] object-contain rounded-[2px]`}
+          />
+        );
+      } else {
+        parts.push(
+          <span
+            key={`custom-fallback-${token.start}`}
+            className="font-semibold text-zinc-500 dark:text-zinc-400"
+          >
+            :{token.data?.name ?? 'emoji'}:
+          </span>,
+        );
+      }
     }
 
     lastIndex = token.end;

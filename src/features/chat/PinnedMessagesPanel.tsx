@@ -7,6 +7,7 @@ import { renderMessageText } from './utils';
 interface PinnedMessagesPanelProps {
   activeChannelId?: Id<'channels'> | null;
   activeDirectConversationId?: Id<'directConversations'> | null;
+  customEmojiUrls: Record<string, string | null | undefined>;
   onClose: () => void;
   onJumpToMessage: (messageId: Id<'messages'>) => void;
   onUnpin: (messageId: Id<'messages'>) => void;
@@ -16,6 +17,7 @@ interface PinnedMessagesPanelProps {
 export function PinnedMessagesPanel({
   activeChannelId,
   activeDirectConversationId,
+  customEmojiUrls,
   onClose,
   onJumpToMessage,
   onUnpin,
@@ -104,7 +106,14 @@ export function PinnedMessagesPanel({
                 
                 <div className="pl-9 pr-2">
                   <p className="text-[13px] text-zinc-700 dark:text-zinc-300 leading-relaxed break-words break-all">
-                    {msg.deleted ? 'Message deleted' : renderMessageText(msg.content, serverMembers, !!msg.isEdited)}
+                    {msg.deleted
+                      ? 'Message deleted'
+                      : renderMessageText(
+                          msg.content,
+                          serverMembers,
+                          customEmojiUrls,
+                          !!msg.isEdited,
+                        )}
                   </p>
                   
                   {!msg.deleted && msg.files && msg.files.length > 0 && (

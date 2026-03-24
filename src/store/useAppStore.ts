@@ -54,7 +54,7 @@ export const useAppStore = create<AppState>((set) => ({
     })),
   setActiveDirectConversationId: (id, options) =>
     set((state) => ({
-      activeSpace: id ? 'direct' : 'direct',
+      activeSpace: 'direct',
       activeChannelId: null,
       activeDirectConversationId: id,
       messageContext: options?.preserveMessageContext

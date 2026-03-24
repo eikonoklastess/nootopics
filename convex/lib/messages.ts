@@ -21,64 +21,23 @@ export async function listTopLevelMessages(
   location: MessageLocation,
   limit: number,
 ) {
-  const topLevelMessages =
-    location.kind === "channel"
-      ? await ctx.db
-          .query("messages")
-          .withIndex("by_channel_id_and_parent_message_id", (q) =>
-            q.eq("channelId", location.channelId).eq("parentMessageId", null),
-          )
-          .order("desc")
-          .take(limit)
-      : await ctx.db
-          .query("messages")
-          .withIndex("by_direct_conversation_id_and_parent_message_id", (q) =>
-            q
-              .eq("directConversationId", location.directConversationId)
-              .eq("parentMessageId", null),
-          )
-          .order("desc")
-          .take(limit);
-
-  if (topLevelMessages.length >= limit) {
-    return topLevelMessages;
-  }
-
-  const seenMessageIds = new Set(topLevelMessages.map((message) => message._id));
-  const messages: MessageDoc[] = [];
-
-  for (const message of topLevelMessages) {
-    messages.push(message);
-  }
-
-  const allMessages =
-    location.kind === "channel"
-      ? ctx.db
-          .query("messages")
-          .withIndex("by_channel_id", (q) => q.eq("channelId", location.channelId))
-          .order("desc")
-      : ctx.db
-          .query("messages")
-          .withIndex("by_direct_conversation_id", (q) =>
-            q.eq("directConversationId", location.directConversationId),
-          )
-          .order("desc");
-
-  for await (const message of allMessages) {
-    if (
-      seenMessageIds.has(message._id) ||
-      message.parentMessageId !== undefined ||
-      message.threadId
-    ) {
-      continue;
-    }
-    messages.push(message);
-    if (messages.length >= limit) {
-      break;
-    }
-  }
-
-  return messages;
+  return location.kind === "channel"
+    ? await ctx.db
+        .query("messages")
+        .withIndex("by_channel_id_and_parent_message_id", (q) =>
+          q.eq("channelId", location.channelId).eq("parentMessageId", null),
+        )
+        .order("desc")
+        .take(limit)
+    : await ctx.db
+        .query("messages")
+        .withIndex("by_direct_conversation_id_and_parent_message_id", (q) =>
+          q
+            .eq("directConversationId", location.directConversationId)
+            .eq("parentMessageId", null),
+        )
+        .order("desc")
+        .take(limit);
 }
 
 export async function listTopLevelMessagesAround(
@@ -88,29 +47,41 @@ export async function listTopLevelMessagesAround(
   newerLimit: number,
   olderLimit: number,
 ) {
+  const targetMessage = await ctx.db.get(targetMessageId);
+  if (!targetMessage || !isTopLevelMessage(targetMessage)) {
+    return [];
+  }
+
+  const matchesLocation =
+    location.kind === "channel"
+      ? targetMessage.channelId === location.channelId
+      : targetMessage.directConversationId === location.directConversationId;
+  if (!matchesLocation) {
+    return [];
+  }
+
+  const indexedTopLevelMessages =
+    location.kind === "channel"
+      ? ctx.db
+          .query("messages")
+          .withIndex("by_channel_id_and_parent_message_id", (q) =>
+            q.eq("channelId", location.channelId).eq("parentMessageId", null),
+          )
+          .order("desc")
+      : ctx.db
+          .query("messages")
+          .withIndex("by_direct_conversation_id_and_parent_message_id", (q) =>
+            q
+              .eq("directConversationId", location.directConversationId)
+              .eq("parentMessageId", null),
+          )
+          .order("desc");
+
   const newer: MessageDoc[] = [];
   const older: MessageDoc[] = [];
   let target: MessageDoc | null = null;
   let foundTarget = false;
-
-  const allMessages =
-    location.kind === "channel"
-      ? ctx.db
-          .query("messages")
-          .withIndex("by_channel_id", (q) => q.eq("channelId", location.channelId))
-          .order("desc")
-      : ctx.db
-          .query("messages")
-          .withIndex("by_direct_conversation_id", (q) =>
-            q.eq("directConversationId", location.directConversationId),
-          )
-          .order("desc");
-
-  for await (const message of allMessages) {
-    if (!isTopLevelMessage(message)) {
-      continue;
-    }
-
+  for await (const message of indexedTopLevelMessages) {
     if (!foundTarget) {
       if (message._id === targetMessageId) {
         target = message;
@@ -143,8 +114,6 @@ export async function countTopLevelMessages(
   location: MessageLocation,
 ) {
   let count = 0;
-  const seenMessageIds = new Set<Id<"messages">>();
-
   const indexedTopLevelMessages =
     location.kind === "channel"
       ? ctx.db
@@ -160,30 +129,8 @@ export async function countTopLevelMessages(
               .eq("parentMessageId", null),
           );
 
-  for await (const message of indexedTopLevelMessages) {
+  for await (const _message of indexedTopLevelMessages) {
     count += 1;
-    seenMessageIds.add(message._id);
-  }
-
-  const allMessages =
-    location.kind === "channel"
-      ? ctx.db
-          .query("messages")
-          .withIndex("by_channel_id", (q) => q.eq("channelId", location.channelId))
-      : ctx.db
-          .query("messages")
-          .withIndex("by_direct_conversation_id", (q) =>
-            q.eq("directConversationId", location.directConversationId),
-          );
-
-  for await (const message of allMessages) {
-    if (
-      !seenMessageIds.has(message._id) &&
-      message.parentMessageId === undefined &&
-      !message.threadId
-    ) {
-      count += 1;
-    }
   }
 
   return count;
@@ -194,7 +141,6 @@ export async function countUnreadTopLevelMessagesSince(
   location: MessageLocation,
   lastReadTime: number,
 ) {
-  const seenMessageIds = new Set<Id<"messages">>();
   let count = 0;
 
   const indexedTopLevelMessages =
@@ -215,37 +161,10 @@ export async function countUnreadTopLevelMessagesSince(
           .order("desc");
 
   for await (const message of indexedTopLevelMessages) {
-    seenMessageIds.add(message._id);
     if (message._creationTime <= lastReadTime) {
       break;
     }
     count += 1;
-  }
-
-  const allMessages =
-    location.kind === "channel"
-      ? ctx.db
-          .query("messages")
-          .withIndex("by_channel_id", (q) => q.eq("channelId", location.channelId))
-          .order("desc")
-      : ctx.db
-          .query("messages")
-          .withIndex("by_direct_conversation_id", (q) =>
-            q.eq("directConversationId", location.directConversationId),
-          )
-          .order("desc");
-
-  for await (const message of allMessages) {
-    if (message._creationTime <= lastReadTime) {
-      break;
-    }
-    if (
-      !seenMessageIds.has(message._id) &&
-      message.parentMessageId === undefined &&
-      !message.threadId
-    ) {
-      count += 1;
-    }
   }
 
   return count;

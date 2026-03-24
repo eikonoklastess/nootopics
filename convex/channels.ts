@@ -1,4 +1,5 @@
-import { mutation, query } from "./_generated/server";
+import { internal } from "./_generated/api";
+import { internalMutation, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { requireServerMembership, requireServerModerator } from "./lib/auth";
 
@@ -10,7 +11,7 @@ export const list = query({
     return await ctx.db
       .query("channels")
       .withIndex("by_server_id", (q) => q.eq("serverId", args.serverId))
-      .collect();
+      .take(100);
   },
 });
 
@@ -64,5 +65,62 @@ export const remove = mutation({
     await requireServerModerator(ctx, channel.serverId);
 
     await ctx.db.delete(args.channelId);
+    await ctx.scheduler.runAfter(0, internal.channels.cleanupRemovedChannelData, {
+      channelId: args.channelId,
+    });
+  },
+});
+
+const MESSAGE_BATCH_SIZE = 50;
+const RELATED_DOC_BATCH_SIZE = 100;
+
+export const cleanupRemovedChannelData = internalMutation({
+  args: { channelId: v.id("channels") },
+  handler: async (ctx, args) => {
+    const messages = await ctx.db
+      .query("messages")
+      .withIndex("by_channel_id", (q) => q.eq("channelId", args.channelId))
+      .take(MESSAGE_BATCH_SIZE);
+    for (const message of messages) {
+      for (const file of message.files ?? []) {
+        await ctx.storage.delete(file.storageId);
+      }
+      await ctx.db.delete(message._id);
+    }
+
+    const typingRows = await ctx.db
+      .query("typing")
+      .withIndex("by_channel_id", (q) => q.eq("channelId", args.channelId))
+      .take(RELATED_DOC_BATCH_SIZE);
+    for (const row of typingRows) {
+      await ctx.db.delete(row._id);
+    }
+
+    const readPositions = await ctx.db
+      .query("readPositions")
+      .withIndex("by_channel_id", (q) => q.eq("channelId", args.channelId))
+      .take(RELATED_DOC_BATCH_SIZE);
+    for (const row of readPositions) {
+      await ctx.db.delete(row._id);
+    }
+
+    const notifications = await ctx.db
+      .query("notifications")
+      .withIndex("by_channel_id", (q) => q.eq("channelId", args.channelId))
+      .take(RELATED_DOC_BATCH_SIZE);
+    for (const row of notifications) {
+      await ctx.db.delete(row._id);
+    }
+
+    if (
+      messages.length === MESSAGE_BATCH_SIZE ||
+      typingRows.length === RELATED_DOC_BATCH_SIZE ||
+      readPositions.length === RELATED_DOC_BATCH_SIZE ||
+      notifications.length === RELATED_DOC_BATCH_SIZE
+    ) {
+      await ctx.scheduler.runAfter(0, internal.channels.cleanupRemovedChannelData, {
+        channelId: args.channelId,
+      });
+    }
   },
 });

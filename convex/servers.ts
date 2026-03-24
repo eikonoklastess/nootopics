@@ -53,7 +53,7 @@ export const list = query({
     const memberships = await ctx.db
       .query("members")
       .withIndex("by_user_id", (q) => q.eq("userId", user._id))
-      .collect();
+      .take(100);
 
     const servers = await Promise.all(
       memberships.map((membership) => ctx.db.get(membership.serverId)),
@@ -116,7 +116,7 @@ export const update = mutation({
   },
   handler: async (ctx, args) => {
     await requireServerModerator(ctx, args.serverId);
-    const updates: any = {};
+    const updates: { imageUrl?: string; name?: string } = {};
     if (args.name !== undefined) updates.name = args.name;
     if (args.imageUrl !== undefined) updates.imageUrl = args.imageUrl;
     
@@ -131,7 +131,27 @@ export const updateMemberRole = mutation({
     role: v.union(v.literal("ADMIN"), v.literal("MODERATOR"), v.literal("GUEST")),
   },
   handler: async (ctx, args) => {
-    await requireServerModerator(ctx, args.serverId);
+    const access = await requireServerModerator(ctx, args.serverId);
+    const targetMembership = await ctx.db.get(args.memberId);
+    if (!targetMembership || targetMembership.serverId !== args.serverId) {
+      throw new Error("Member not found");
+    }
+
+    if (targetMembership.userId === access.server.ownerId && args.role !== "ADMIN") {
+      throw new Error("Cannot change the server owner's role");
+    }
+
+    if (targetMembership.role === "ADMIN" && args.role !== "ADMIN") {
+      const adminMemberships = await ctx.db
+        .query("members")
+        .withIndex("by_server_id", (q) => q.eq("serverId", args.serverId))
+        .take(100);
+      const adminCount = adminMemberships.filter((member) => member.role === "ADMIN").length;
+      if (adminCount <= 1) {
+        throw new Error("A server must keep at least one admin");
+      }
+    }
+
     await ctx.db.patch(args.memberId, { role: args.role });
   },
 });

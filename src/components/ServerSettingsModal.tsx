@@ -13,6 +13,9 @@ interface ServerSettingsModalProps {
 }
 
 export function ServerSettingsModal({ serverId, isOpen, onClose }: ServerSettingsModalProps) {
+  const isMemberRole = (value: string): value is "ADMIN" | "MODERATOR" | "GUEST" =>
+    value === "ADMIN" || value === "MODERATOR" || value === "GUEST";
+
   const [activeTab, setActiveTab] = useState<"OVERVIEW" | "ROLES">("OVERVIEW");
   const [name, setName] = useState("");
   const [imageUrl, setImageUrl] = useState("");
@@ -113,7 +116,16 @@ export function ServerSettingsModal({ serverId, isOpen, onClose }: ServerSetting
                     {member.memberId && member.role !== "ADMIN" ? (
                       <select 
                         value={member.role}
-                        onChange={(e) => updateMemberRole({ serverId, memberId: member.memberId as Id<"members">, role: e.target.value as any })}
+                        onChange={(e) => {
+                          if (!isMemberRole(e.target.value)) {
+                            return;
+                          }
+                          void updateMemberRole({
+                            serverId,
+                            memberId: member.memberId as Id<"members">,
+                            role: e.target.value,
+                          });
+                        }}
                         className="bg-white dark:bg-[#1E1F22] text-sm p-1.5 border-none rounded outline-none cursor-pointer focus:ring-2 focus:ring-indigo-500"
                       >
                         <option value="ADMIN">Admin</option>

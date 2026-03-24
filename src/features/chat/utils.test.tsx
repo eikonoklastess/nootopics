@@ -43,7 +43,13 @@ const messages: ChatMessage[] = [
 describe('chat utils', () => {
   it('finds only known mentions', () => {
     expect(findMentionMatches('hello @Alice Example and @Missing', members)).toEqual([
-      { start: 6, end: 20, name: 'Alice Example' },
+      {
+        content: '@Alice Example',
+        data: { name: 'Alice Example' },
+        end: 20,
+        start: 6,
+        type: 'mention',
+      },
     ]);
   });
 

@@ -22,6 +22,7 @@ interface MessageFeedProps {
   onUnpin?: (messageId: ChatMessage['_id']) => void;
   onStartEditing: (message: ChatMessage) => void;
   onSubmitEdit: (event: React.FormEvent) => void;
+  customEmojiUrls: Record<string, string | null | undefined>;
   serverMembers: ServerMember[];
   targetMessageId: ChatMessage['_id'] | null;
 }
@@ -41,6 +42,7 @@ export function MessageFeed({
   onUnpin,
   onStartEditing,
   onSubmitEdit,
+  customEmojiUrls,
   serverMembers,
   targetMessageId,
 }: MessageFeedProps) {
@@ -163,6 +165,7 @@ export function MessageFeed({
                         : renderMessageText(
                             message.content,
                             serverMembers,
+                            customEmojiUrls,
                             !!message.isEdited,
                           )}
                     </p>

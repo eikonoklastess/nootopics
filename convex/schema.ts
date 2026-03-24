@@ -53,7 +53,9 @@ export default defineSchema({
     order: v.optional(v.number()),
     topLevelMessageCount: v.optional(v.number()),
     lastMessageTime: v.optional(v.number()),
-  }).index("by_server_id", ["serverId"]),
+  })
+    .index("by_server_id", ["serverId"])
+    .index("by_server_id_and_category_id", ["serverId", "categoryId"]),
 
   directConversations: defineTable({
     pairKey: v.string(),
@@ -92,6 +94,7 @@ export default defineSchema({
     .index("by_channel_id_and_pinned", ["channelId", "pinned"])
     .index("by_channel_id_and_parent_message_id", ["channelId", "parentMessageId"])
     .index("by_direct_conversation_id", ["directConversationId"])
+    .index("by_direct_conversation_id_and_pinned", ["directConversationId", "pinned"])
     .index("by_direct_conversation_id_and_parent_message_id", ["directConversationId", "parentMessageId"])
     .index("by_server_id", ["serverId"])
     .index("by_thread_id", ["threadId"])
@@ -119,6 +122,7 @@ export default defineSchema({
     lastReadTopLevelMessageCount: v.optional(v.number()),
   })
     .index("by_user_id", ["userId"])
+    .index("by_channel_id", ["channelId"])
     .index("by_user_id_and_channel_id", ["userId", "channelId"])
     .index("by_user_id_and_direct_conversation_id", ["userId", "directConversationId"]),
 
@@ -139,6 +143,9 @@ export default defineSchema({
     read: v.boolean(),
   })
     .index("by_user_id", ["userId"])
-    .index("by_user_id_and_read", ["userId", "read"]),
+    .index("by_user_id_and_read", ["userId", "read"])
+    .index("by_channel_id", ["channelId"])
+    .index("by_direct_conversation_id", ["directConversationId"])
+    .index("by_message_id", ["messageId"]),
   
 });

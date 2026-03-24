@@ -27,6 +27,11 @@ export function NavigationSidebar() {
     (sum, count) => sum + count,
     0,
   );
+  const visibleServers = (servers ?? []).filter(
+    (
+      server,
+    ): server is NonNullable<Exclude<typeof servers, undefined>[number]> => server !== null,
+  );
 
   const handleCreateServer = async () => {
     if (newServerName.trim()) {
@@ -108,7 +113,7 @@ export function NavigationSidebar() {
           </TooltipContent>
         </Tooltip>
 
-        {servers?.map((server: any) => (
+        {visibleServers.map((server) => (
           <Tooltip key={server._id} delayDuration={50}>
             <TooltipTrigger>
               <div onClick={() => setActiveServerId(server._id)} className="relative group flex items-center justify-center cursor-pointer">

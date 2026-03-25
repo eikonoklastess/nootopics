@@ -2,6 +2,7 @@ import { internal } from "./_generated/api";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { requireServerMembership, requireServerModerator } from "./lib/auth";
+import { normalizeName } from "./lib/normalize";
 
 export const list = query({
   args: { serverId: v.id("servers") },
@@ -31,6 +32,7 @@ export const create = mutation({
       type: args.type,
       topLevelMessageCount: 0,
       categoryId: args.categoryId,
+      normalizedName: normalizeName(args.name),
     });
     return channelId;
   },
@@ -49,7 +51,10 @@ export const update = mutation({
     await requireServerModerator(ctx, channel.serverId);
 
     const updates: Partial<typeof channel> = {};
-    if (args.name !== undefined) updates.name = args.name;
+    if (args.name !== undefined) {
+      updates.name = args.name;
+      updates.normalizedName = normalizeName(args.name);
+    }
     if (args.categoryId !== undefined) updates.categoryId = args.categoryId === null ? undefined : args.categoryId;
     if (args.order !== undefined) updates.order = args.order;
 

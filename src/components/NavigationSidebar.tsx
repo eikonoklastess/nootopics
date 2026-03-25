@@ -11,16 +11,16 @@ import { Button } from "./ui/button";
 import { NextToUserButtonSettings } from "../features/chat/NextToUserButtonSettings";
 import ThemeToggle from "./ThemeToggle";
 
-export function NavigationSidebar() {
+interface NavigationSidebarProps {
+  directUnreadCounts: Record<string, number>;
+}
+
+export function NavigationSidebar({ directUnreadCounts }: NavigationSidebarProps) {
   const { activeServerId, activeSpace, setActiveServerId, showDirectMessages } =
     useAppStore();
   const servers = useQuery(api.servers.list);
   const createServer = useMutation(api.servers.create);
   const joinServer = useMutation(api.servers.join);
-  const directUnreadCounts =
-    (useQuery(api.readPositions.getDirectUnreadCounts) as
-      | Record<string, number>
-      | undefined) ?? {};
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [newServerName, setNewServerName] = useState("");

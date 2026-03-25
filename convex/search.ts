@@ -4,6 +4,7 @@ import type { QueryCtx } from "./_generated/server";
 import { query } from "./_generated/server";
 import { requireServerMembership } from "./lib/auth";
 import { getReplyCount, resolveUsersById } from "./lib/messages";
+import { normalizeName } from "./lib/normalize";
 
 const hasFilterValidator = v.union(
   v.literal("file"),
@@ -14,9 +15,8 @@ const hasFilterValidator = v.union(
   v.literal("reply"),
 );
 
-type SearchableMessage = Doc<"messages">;
 type HasFilter = "file" | "image" | "video" | "audio" | "thread" | "reply";
-type ServerSearchMessage = SearchableMessage & { channelId: Id<"channels"> };
+type SearchDigest = Doc<"messageSearchDigests">;
 
 export const searchMessages = query({
   args: {
@@ -33,43 +33,20 @@ export const searchMessages = query({
     await requireServerMembership(ctx, args.serverId);
 
     const limit = Math.max(1, Math.min(args.limit ?? 20, 25));
-    const channels = await ctx.db
-      .query("channels")
-      .withIndex("by_server_id", (q) => q.eq("serverId", args.serverId))
-      .take(100);
     const channelFilter = normalizeName(args.channelName);
-    const allowedChannels = channelFilter
-      ? channels.filter((channel) => normalizeName(channel.name).includes(channelFilter))
-      : channels;
+    const authorFilter = normalizeName(args.authorName);
 
-    if (allowedChannels.length === 0) {
+    const allowedChannelIds = channelFilter
+      ? await resolveAllowedChannelIds(ctx, args.serverId, channelFilter)
+      : null;
+    if (allowedChannelIds && allowedChannelIds.size === 0) {
       return [];
     }
 
-    const allowedChannelIds = new Set<Id<"channels">>(
-      allowedChannels.map((channel) => channel._id),
-    );
-    const channelNames = new Map(
-      channels.map((channel) => [channel._id, channel.name] as const),
-    );
-
-    const members = await ctx.db
-      .query("members")
-      .withIndex("by_server_id", (q) => q.eq("serverId", args.serverId))
-      .take(100);
-    const memberUsers = (await Promise.all(
-      members.map((member) => ctx.db.get(member.userId)),
-    )).filter(isDefined);
-    const authorFilter = normalizeName(args.authorName);
     const allowedAuthorIds = authorFilter
-      ? new Set<Id<"users">>(
-          memberUsers
-            .filter((user) => normalizeName(user.name).includes(authorFilter))
-            .map((user) => user._id),
-        )
+      ? await resolveAllowedAuthorIds(ctx, args.serverId, authorFilter)
       : null;
-
-    if (authorFilter && allowedAuthorIds?.size === 0) {
+    if (allowedAuthorIds && allowedAuthorIds.size === 0) {
       return [];
     }
 
@@ -77,56 +54,58 @@ export const searchMessages = query({
     const candidates =
       searchText.length > 0
         ? await ctx.db
-            .query("messages")
+            .query("messageSearchDigests")
             .withSearchIndex("search_content", (q) =>
               q.search("content", searchText).eq("serverId", args.serverId),
             )
-            .take(Math.max(limit * 6, 120))
-        : await listRecentServerMessages(ctx, args.serverId, Math.max(limit * 6, 180), 600);
+            .take(Math.max(limit * 8, 120))
+        : await listRecentSearchDigests(ctx, args.serverId, Math.max(limit * 8, 180), 300);
 
-    const results: ServerSearchMessage[] = [];
+    const filtered = candidates.filter((digest) =>
+      matchesSearchFilters(digest, {
+        after: args.after ?? null,
+        allowedAuthorIds,
+        allowedChannelIds,
+        before: args.before ?? null,
+        has: args.has ?? null,
+      }),
+    );
+    const results = filtered.slice(0, limit);
 
-    for (const message of candidates) {
-      if (!message.channelId) {
-        continue;
-      }
-      const serverMessage = message as ServerSearchMessage;
-      if (
-        !(await matchesSearchFilters(ctx, serverMessage, {
-          allowedAuthorIds,
-          allowedChannelIds,
-          before: args.before ?? null,
-          after: args.after ?? null,
-          has: args.has ?? null,
-        }))
-      ) {
-        continue;
-      }
-
-      results.push(serverMessage);
-      if (results.length >= limit) {
-        break;
-      }
-    }
+    const messages = (await Promise.all(
+      results.map(async (digest) => {
+        const message = await ctx.db.get(digest.messageId);
+        return message && message.channelId ? ({ digest, message } as const) : null;
+      }),
+    )).filter((row): row is NonNullable<typeof row> => row !== null);
 
     const users = await resolveUsersById(
       ctx,
-      results.map((message) => message.userId),
+      messages.map(({ message }) => message.userId),
+    );
+    const channels = await Promise.all(
+      [...new Set(messages.map(({ message }) => message.channelId!))].map(async (channelId) => {
+        const channel = await ctx.db.get(channelId);
+        return channel ? ([channelId, channel.name] as const) : null;
+      }),
+    );
+    const channelNames = new Map(
+      channels.filter((entry): entry is NonNullable<typeof entry> => entry !== null),
     );
 
     return await Promise.all(
-      results.map(async (message) => {
+      messages.map(async ({ digest, message }) => {
         const user = users.get(message.userId);
         return {
           _creationTime: message._creationTime,
           _id: message._id,
           anchorMessageId: message.threadId ?? message._id,
-          channelId: message.channelId,
-          channelName: channelNames.get(message.channelId) ?? "unknown-channel",
+          channelId: message.channelId!,
+          channelName: channelNames.get(message.channelId!) ?? "unknown-channel",
           content: message.content,
           deleted: message.deleted,
-          hasFiles: Boolean(message.files && message.files.length > 0),
-          isThreadReply: Boolean(message.threadId),
+          hasFiles: digest.hasFiles,
+          isThreadReply: digest.isReply,
           replyCount: await getReplyCount(ctx, message),
           threadReplyMessageId: message.threadId ? message._id : null,
           user: user
@@ -143,85 +122,136 @@ export const searchMessages = query({
   },
 });
 
-async function listRecentServerMessages(
+async function listRecentSearchDigests(
   ctx: QueryCtx,
   serverId: Id<"servers">,
   limit: number,
   scanLimit: number,
 ) {
-  const messages: SearchableMessage[] = [];
+  const digests: SearchDigest[] = [];
   let scanned = 0;
 
-  for await (const message of ctx.db
-    .query("messages")
-    .withIndex("by_server_id", (q) => q.eq("serverId", serverId))
+  for await (const digest of ctx.db
+    .query("messageSearchDigests")
+    .withIndex("by_server_id_and_created_at", (q) => q.eq("serverId", serverId))
     .order("desc")) {
-    messages.push(message);
+    digests.push(digest);
     scanned += 1;
-    if (messages.length >= limit || scanned >= scanLimit) {
+    if (digests.length >= limit || scanned >= scanLimit) {
       break;
     }
   }
 
-  return messages;
+  return digests;
 }
 
-async function matchesSearchFilters(
-  ctx: QueryCtx,
-  message: ServerSearchMessage,
+function matchesSearchFilters(
+  digest: SearchDigest,
   filters: {
     after: number | null;
     allowedAuthorIds: Set<Id<"users">> | null;
-    allowedChannelIds: Set<Id<"channels">>;
+    allowedChannelIds: Set<Id<"channels">> | null;
     before: number | null;
     has: HasFilter | null;
   },
 ) {
-  if (!filters.allowedChannelIds.has(message.channelId)) {
+  if (filters.allowedChannelIds && !filters.allowedChannelIds.has(digest.channelId)) {
     return false;
   }
-  if (filters.allowedAuthorIds && !filters.allowedAuthorIds.has(message.userId)) {
+  if (filters.allowedAuthorIds && !filters.allowedAuthorIds.has(digest.userId)) {
     return false;
   }
-  if (filters.before !== null && message._creationTime > filters.before) {
+  if (filters.before !== null && digest.createdAt > filters.before) {
     return false;
   }
-  if (filters.after !== null && message._creationTime < filters.after) {
+  if (filters.after !== null && digest.createdAt < filters.after) {
     return false;
   }
-  if (filters.has && !(await matchesHasFilter(ctx, message, filters.has))) {
+  if (filters.has && !matchesHasFilter(digest, filters.has)) {
     return false;
   }
   return true;
 }
 
-async function matchesHasFilter(
-  ctx: QueryCtx,
-  message: SearchableMessage,
-  has: HasFilter,
-) {
-  const files = message.files ?? [];
-
+function matchesHasFilter(digest: SearchDigest, has: HasFilter) {
   switch (has) {
     case "file":
-      return files.length > 0;
+      return digest.hasFiles;
     case "image":
-      return files.some((file) => file.type.startsWith("image/"));
+      return digest.hasImage;
     case "video":
-      return files.some((file) => file.type.startsWith("video/"));
+      return digest.hasVideo;
     case "audio":
-      return files.some((file) => file.type.startsWith("audio/"));
+      return digest.hasAudio;
     case "thread":
-      return (await getReplyCount(ctx, message)) > 0;
+      return digest.hasReplies;
     case "reply":
-      return Boolean(message.threadId);
+      return digest.isReply;
   }
 }
 
-function normalizeName(value: string | undefined) {
-  return value?.trim().toLowerCase().replace(/^#/, "") ?? "";
+async function resolveAllowedChannelIds(
+  ctx: QueryCtx,
+  serverId: Id<"servers">,
+  channelFilter: string,
+) {
+  const matches = await queryChannelsByPrefix(ctx, serverId, channelFilter);
+  const rows =
+    matches.length > 0
+      ? matches
+      : (await ctx.db
+          .query("channels")
+          .withIndex("by_server_id", (q) => q.eq("serverId", serverId))
+          .take(100))
+          .filter((channel) => normalizeName(channel.name).includes(channelFilter));
+
+  return new Set<Id<"channels">>(rows.map((channel) => channel._id));
 }
 
-function isDefined<T>(value: T | null): value is T {
-  return value !== null;
+async function resolveAllowedAuthorIds(
+  ctx: QueryCtx,
+  serverId: Id<"servers">,
+  authorFilter: string,
+) {
+  const matches = await queryMembersByPrefix(ctx, serverId, authorFilter);
+  const rows =
+    matches.length > 0
+      ? matches
+      : (await ctx.db
+          .query("members")
+          .withIndex("by_server_id", (q) => q.eq("serverId", serverId))
+          .take(100))
+          .filter((member) => normalizeName(member.userName).includes(authorFilter));
+
+  return new Set<Id<"users">>(rows.map((member) => member.userId));
+}
+
+async function queryChannelsByPrefix(
+  ctx: QueryCtx,
+  serverId: Id<"servers">,
+  prefix: string,
+) {
+  const upperBound = `${prefix}\uffff`;
+  return await ctx.db
+    .query("channels")
+    .withIndex("by_server_id_and_normalized_name", (q) =>
+      q.eq("serverId", serverId).gte("normalizedName", prefix).lte("normalizedName", upperBound),
+    )
+    .take(50);
+}
+
+async function queryMembersByPrefix(
+  ctx: QueryCtx,
+  serverId: Id<"servers">,
+  prefix: string,
+) {
+  const upperBound = `${prefix}\uffff`;
+  return await ctx.db
+    .query("members")
+    .withIndex("by_server_id_and_user_name_normalized", (q) =>
+      q.eq("serverId", serverId)
+        .gte("userNameNormalized", prefix)
+        .lte("userNameNormalized", upperBound),
+    )
+    .take(50);
 }

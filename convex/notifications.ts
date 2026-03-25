@@ -14,12 +14,24 @@ export const list = query({
 
     return await Promise.all(
       notifications.map(async (notification) => {
+        if (
+          notification.authorName !== undefined &&
+          notification.messagePreview !== undefined
+        ) {
+          return {
+            ...notification,
+            authorName: notification.authorName,
+            messageContent: notification.messagePreview,
+          };
+        }
+
         const message = await ctx.db.get(notification.messageId);
         const author = message ? await ctx.db.get(message.userId) : null;
         return {
           ...notification,
+          authorName: notification.authorName ?? author?.name ?? "Unknown User",
           messageContent: message?.content ?? "",
-          authorName: author?.name ?? "Unknown User",
+          messagePreview: notification.messagePreview ?? message?.content ?? "",
         };
       }),
     );

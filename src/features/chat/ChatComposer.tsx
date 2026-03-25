@@ -1,12 +1,7 @@
-import { useRef, useState } from 'react';
-import { useQuery } from 'convex/react';
-import { api } from '../../../convex/_generated/api';
-import { useAppStore } from '../../store/useAppStore';
-import { EmojiPicker } from './EmojiPicker';
+import { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { useFileUpload, type PendingFile } from '../../hooks/useFileUpload';
 import type { ServerEmoji, ServerMember } from './types';
 import { getFilteredMembers } from './utils';
-import emojiData from '@emoji-mart/data';
 
 interface ChatComposerProps {
   content: string;
@@ -18,8 +13,14 @@ interface ChatComposerProps {
   onSend: (event: React.FormEvent) => void;
   onTyping: () => void;
   placeholder?: string;
+  serverEmojis: ServerEmoji[];
   serverMembers: ServerMember[];
 }
+
+const LazyEmojiPicker = lazy(async () => {
+  const module = await import('./EmojiPicker');
+  return { default: module.EmojiPicker };
+});
 
 function FilePreviewStrip({
   pendingFiles,
@@ -85,9 +86,9 @@ export function ChatComposer({
   onSend,
   onTyping,
   placeholder,
+  serverEmojis,
   serverMembers,
 }: ChatComposerProps) {
-  const { activeServerId, activeSpace } = useAppStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const [showPlusMenu, setShowPlusMenu] = useState(false);
@@ -99,13 +100,7 @@ export function ChatComposer({
   const [showEmojiAutocomplete, setShowEmojiAutocomplete] = useState(false);
   const [emojiQuery, setEmojiQuery] = useState('');
   const [emojiIndex, setEmojiIndex] = useState(0);
-
-  const serverEmojis = useQuery(
-    api.emojis.list,
-    activeSpace === "server" && activeServerId
-      ? { serverId: activeServerId }
-      : "skip"
-  ) as ServerEmoji[] | undefined;
+  const [emojiData, setEmojiData] = useState<EmojiMartData['emojis'] | null>(null);
 
   const filteredMembers = getFilteredMembers(serverMembers, mentionQuery);
 
@@ -128,8 +123,19 @@ export function ChatComposer({
     emojis?: Record<string, { id: string; keywords?: string[]; skins: { native: string }[] }>;
   };
 
+  useEffect(() => {
+    if ((!showEmojiPicker && !showEmojiAutocomplete) || emojiData) {
+      return;
+    }
+
+    void import('@emoji-mart/data').then((module) => {
+      const payload = (module.default ?? module) as EmojiMartData;
+      setEmojiData(payload.emojis ?? {});
+    });
+  }, [emojiData, showEmojiAutocomplete, showEmojiPicker]);
+
   const queryLower = emojiQuery.toLowerCase();
-  const customMatches: CustomEmojiOption[] = (serverEmojis ?? [])
+  const customMatches: CustomEmojiOption[] = serverEmojis
     .filter((emoji) => emoji.name.toLowerCase().includes(queryLower))
     .map((emoji) => ({
       id: String(emoji._id),
@@ -140,7 +146,7 @@ export function ChatComposer({
       url: emoji.url,
     }));
 
-  const standardEmojis = Object.values((emojiData as EmojiMartData).emojis || {});
+  const standardEmojis = Object.values(emojiData ?? {});
   const standardMatches = standardEmojis
     .filter(
       (emoji) =>
@@ -408,11 +414,22 @@ export function ChatComposer({
 
       {showEmojiPicker && (
         <div className="absolute bottom-full right-0 mb-2 mr-6 z-50">
-          <EmojiPicker onSelect={(emoji) => {
-             onContentChange(content + emoji);
-             setShowEmojiPicker(false);
-             inputRef.current?.focus();
-          }} />
+          <Suspense
+            fallback={
+              <div className="rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-500 shadow-xl dark:border-zinc-700 dark:bg-[#2B2D31] dark:text-zinc-400">
+                Loading emojis...
+              </div>
+            }
+          >
+            <LazyEmojiPicker
+              onSelect={(emoji) => {
+                onContentChange(content + emoji);
+                setShowEmojiPicker(false);
+                inputRef.current?.focus();
+              }}
+              serverEmojis={serverEmojis}
+            />
+          </Suspense>
         </div>
       )}
 

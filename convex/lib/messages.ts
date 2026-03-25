@@ -1,6 +1,7 @@
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import type { PaginationOptions, PaginationResult } from "convex/server";
+import { getLastSeen, getPresenceStatus, resolvePresenceByUserIds } from "./presence";
 
 type ReaderCtx = QueryCtx | MutationCtx;
 type MessageDoc = Doc<"messages">;
@@ -255,11 +256,16 @@ export async function resolveUsersById(
 ) {
   const uniqueIds = [...new Set(userIds)];
   const users = await Promise.all(uniqueIds.map((userId) => ctx.db.get(userId)));
+  const presenceMap = await resolvePresenceByUserIds(ctx, uniqueIds);
   const userMap = new Map<Id<"users">, Doc<"users">>();
 
   for (const user of users) {
     if (user) {
-      userMap.set(user._id, user);
+      userMap.set(user._id, {
+        ...user,
+        lastSeen: getLastSeen(user, presenceMap),
+        status: getPresenceStatus(user, presenceMap),
+      });
     }
   }
 

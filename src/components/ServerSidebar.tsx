@@ -25,7 +25,15 @@ import { ChannelSettingsModal } from "./ChannelSettingsModal";
 import type { Id } from "../../convex/_generated/dataModel";
 import { toast } from "sonner";
 
-export function ServerSidebar() {
+interface ServerSidebarProps {
+  directUnreadCounts: Record<string, number>;
+  serverEmojis: ServerEmoji[];
+}
+
+export function ServerSidebar({
+  directUnreadCounts,
+  serverEmojis,
+}: ServerSidebarProps) {
   const {
     activeSpace,
     activeServerId,
@@ -70,21 +78,11 @@ export function ServerSidebar() {
       api.directMessages.list,
       activeSpace === "direct" ? {} : "skip",
     ) as DirectConversationSummary[] | undefined) ?? [];
-  const directUnreadCounts =
-    (useQuery(
-      api.readPositions.getDirectUnreadCounts,
-      activeSpace === "direct" ? {} : "skip",
-    ) as Record<string, number> | undefined) ?? {};
   const directCandidates =
     (useQuery(
       api.users.listDirectMessageCandidates,
       activeSpace === "direct" ? {} : "skip",
     ) as ServerMember[] | undefined) ?? [];
-  const serverEmojis =
-    (useQuery(
-      api.emojis.list,
-      activeSpace === "server" && activeServerId ? { serverId: activeServerId } : "skip",
-    ) as ServerEmoji[] | undefined) ?? [];
 
   const currentUser = useQuery(api.users.current);
 

@@ -51,6 +51,11 @@ export interface ChatMessage {
   files?: ChatAttachment[];
   isEdited?: boolean;
   pinned?: boolean;
+  reactionSummary?: Array<{
+    count: number;
+    emoji: string;
+    userIds: Id<'users'>[];
+  }>;
   replyCount: number;
   threadId?: Id<'messages'>;
   user: ChatUser | null;
@@ -63,6 +68,11 @@ export interface ThreadReply {
   deleted: boolean;
   files?: ChatAttachment[];
   isEdited?: boolean;
+  reactionSummary?: Array<{
+    count: number;
+    emoji: string;
+    userIds: Id<'users'>[];
+  }>;
   threadId?: Id<'messages'>;
   user: ChatUser | null;
 }

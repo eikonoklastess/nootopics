@@ -19,6 +19,8 @@ import {
   resolveMessageFiles,
   resolveUsersById,
 } from "./lib/messages";
+import { buildMessagePreview } from "./lib/normalize";
+import { upsertMessageSearchDigest } from "./lib/searchDigests";
 
 const conversationArgs = {
   channelId: v.optional(v.id("channels")),
@@ -112,6 +114,7 @@ export const send = mutation({
       parentMessageId: null,
       replyCount: 0,
       files: args.files,
+      reactionSummary: [],
       ...(access.kind === "channel"
         ? {
             channelId: access.channel._id,
@@ -156,6 +159,8 @@ export const send = mutation({
           messageId,
           serverId: access.channel.serverId,
           channelId: access.channel._id,
+          authorName: access.user.name,
+          messagePreview: buildMessagePreview(args.content),
           type: "MENTION",
           read: false,
         });
@@ -197,10 +202,17 @@ export const send = mutation({
           userId: member.userId,
           messageId,
           directConversationId: access.directConversation._id,
+          authorName: access.user.name,
+          messagePreview: buildMessagePreview(args.content),
           type: "DIRECT_MESSAGE",
           read: false,
         });
       }
+    }
+
+    const insertedMessage = await ctx.db.get(messageId);
+    if (insertedMessage) {
+      await upsertMessageSearchDigest(ctx, insertedMessage);
     }
 
     return messageId;
@@ -311,6 +323,13 @@ export const edit = mutation({
       content: args.content,
       isEdited: true,
     });
+    const updatedMessage = await ctx.db.get(args.messageId);
+    if (updatedMessage) {
+      await upsertMessageSearchDigest(ctx, updatedMessage);
+    }
+    await updateNotificationsForMessage(ctx, args.messageId, {
+      messagePreview: buildMessagePreview(args.content),
+    });
   },
 });
 
@@ -337,6 +356,13 @@ export const remove = mutation({
       isEdited: false,
       files: [],
     });
+    const updatedMessage = await ctx.db.get(args.messageId);
+    if (updatedMessage) {
+      await upsertMessageSearchDigest(ctx, updatedMessage);
+    }
+    await updateNotificationsForMessage(ctx, args.messageId, {
+      messagePreview: "",
+    });
 
     if (message.parentMessageId) {
       const parent = await ctx.db.get(message.parentMessageId);
@@ -344,6 +370,10 @@ export const remove = mutation({
         await ctx.db.patch(parent._id, {
           replyCount: parent.replyCount - 1,
         });
+        const updatedParent = await ctx.db.get(parent._id);
+        if (updatedParent) {
+          await upsertMessageSearchDigest(ctx, updatedParent);
+        }
       }
     } else {
       if (message.channelId) {
@@ -378,6 +408,7 @@ async function serializeTopLevelMessages(
     topLevel.map(async (message) => {
       return {
         ...message,
+        reactionSummary: message.reactionSummary ?? [],
         user: users.get(message.userId) ?? null,
         files: await resolveMessageFiles(ctx, message.files),
         replyCount: await getReplyCount(ctx, message),
@@ -422,13 +453,19 @@ async function getValidMentionedUserIdsForServer(
     return [];
   }
 
-  const serverMembers = await ctx.db
-    .query("members")
-    .withIndex("by_server_id", (q) => q.eq("serverId", serverId))
-    .take(200);
-  const validUserIds = new Set(serverMembers.map((member) => member.userId));
+  const membershipChecks = await Promise.all(
+    userIds.map(async (userId) => {
+      const membership = await ctx.db
+        .query("members")
+        .withIndex("by_server_id_and_user_id", (q) =>
+          q.eq("serverId", serverId).eq("userId", userId),
+        )
+        .unique();
+      return membership ? userId : null;
+    }),
+  );
 
-  return userIds.filter((userId) => validUserIds.has(userId));
+  return membershipChecks.filter((userId): userId is Id<"users"> => userId !== null);
 }
 
 async function requireChannelModerationForMessage(
@@ -449,4 +486,21 @@ async function requireChannelModerationForMessage(
     throw new Error("Channel not found");
   }
   await requireServerModerator(ctx, channel.serverId);
+}
+
+async function updateNotificationsForMessage(
+  ctx: MutationCtx,
+  messageId: Id<"messages">,
+  patch: {
+    messagePreview?: string;
+  },
+) {
+  const notifications = await ctx.db
+    .query("notifications")
+    .withIndex("by_message_id", (q) => q.eq("messageId", messageId))
+    .take(100);
+
+  for (const notification of notifications) {
+    await ctx.db.patch(notification._id, patch);
+  }
 }

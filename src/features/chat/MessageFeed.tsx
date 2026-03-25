@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useQuery, useMutation } from 'convex/react';
+import { useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import { StatusIndicator } from '../../components/StatusIndicator';
 import { MessageSkeleton } from '../../components/Skeletons';
@@ -69,14 +69,6 @@ export function MessageFeed({
   const [isScrolledUp, setIsScrolledUp] = useState(false);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const toggleReaction = useMutation(api.reactions.toggle);
-
-  const messageIds = messages
-    .map((m) => m._id)
-    .filter((id) => !String(id).startsWith('pending-'));
-  const reactionsMap = useQuery(
-    api.reactions.listForMessages,
-    messageIds.length > 0 ? { messageIds } : 'skip',
-  ) as Record<string, Array<{ emoji: string; count: number; userIds: string[] }>> | undefined;
 
   useEffect(() => {
     if (!targetMessageId) {
@@ -292,9 +284,9 @@ export function MessageFeed({
                 </>
               )}
 
-              {!message.deleted && reactionsMap?.[message._id] && reactionsMap[message._id].length > 0 && (
+              {!message.deleted && message.reactionSummary && message.reactionSummary.length > 0 && (
                 <div className="flex flex-wrap gap-1 mt-1.5">
-                  {reactionsMap[message._id].map((reaction) => {
+                  {message.reactionSummary.map((reaction) => {
                     const hasReacted = currentUserClerkId && serverMembers.some(
                       (m) => m.clerkId === currentUserClerkId && reaction.userIds.includes(m._id),
                     );

@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
-import { requireCurrentUser, requireCurrentUserForMutation, requireMessageAccess } from "./lib/auth";
-import type { Id } from "./_generated/dataModel";
+import { requireCurrentUserForMutation, requireMessageAccess } from "./lib/auth";
+import type { Doc, Id } from "./_generated/dataModel";
 
 type GroupedReaction = {
   emoji: string;
@@ -9,34 +9,11 @@ type GroupedReaction = {
   userIds: string[];
 };
 
-function groupReactionsByEmoji(
-  reactions: Array<{ emoji: string; userId: Id<"users"> }>,
-): GroupedReaction[] {
-  const map = new Map<string, string[]>();
-  for (const r of reactions) {
-    const list = map.get(r.emoji);
-    if (list) {
-      list.push(r.userId);
-    } else {
-      map.set(r.emoji, [r.userId]);
-    }
-  }
-  return Array.from(map, ([emoji, userIds]) => ({
-    emoji,
-    count: userIds.length,
-    userIds,
-  }));
-}
-
 export const list = query({
   args: { messageId: v.id("messages") },
   handler: async (ctx, args) => {
-    await requireMessageAccess(ctx, args.messageId);
-    const reactions = await ctx.db
-      .query("reactions")
-      .withIndex("by_message_id", (q) => q.eq("messageId", args.messageId))
-      .take(500);
-    return groupReactionsByEmoji(reactions);
+    const { message } = await requireMessageAccess(ctx, args.messageId);
+    return message.reactionSummary ?? [];
   },
 });
 
@@ -47,7 +24,7 @@ export const toggle = mutation({
   },
   handler: async (ctx, args) => {
     const { user } = await requireCurrentUserForMutation(ctx);
-    await requireMessageAccess(ctx, args.messageId);
+    const { message } = await requireMessageAccess(ctx, args.messageId);
 
     const existing = await ctx.db
       .query("reactions")
@@ -61,11 +38,27 @@ export const toggle = mutation({
 
     if (existing) {
       await ctx.db.delete(existing._id);
+      await ctx.db.patch(args.messageId, {
+        reactionSummary: applyReactionChange(
+          message.reactionSummary,
+          args.emoji,
+          user._id,
+          "remove",
+        ),
+      });
     } else {
       await ctx.db.insert("reactions", {
         messageId: args.messageId,
         userId: user._id,
         emoji: args.emoji,
+      });
+      await ctx.db.patch(args.messageId, {
+        reactionSummary: applyReactionChange(
+          message.reactionSummary,
+          args.emoji,
+          user._id,
+          "add",
+        ),
       });
     }
   },
@@ -77,16 +70,63 @@ export const listForMessages = query({
     const result: Record<string, GroupedReaction[]> = {};
     for (const messageId of args.messageIds) {
       try {
-        await requireMessageAccess(ctx, messageId);
+        const { message } = await requireMessageAccess(ctx, messageId);
+        result[messageId] = message.reactionSummary ?? [];
       } catch {
         continue;
       }
-      const reactions = await ctx.db
-        .query("reactions")
-        .withIndex("by_message_id", (q) => q.eq("messageId", messageId))
-        .take(100);
-      result[messageId] = groupReactionsByEmoji(reactions);
     }
     return result;
   },
 });
+
+function applyReactionChange(
+  currentSummary: Doc<"messages">["reactionSummary"],
+  emoji: string,
+  userId: Id<"users">,
+  mode: "add" | "remove",
+) {
+  const nextSummary = [...(currentSummary ?? [])];
+  const existingIndex = nextSummary.findIndex((entry) => entry.emoji === emoji);
+
+  if (mode === "add") {
+    if (existingIndex === -1) {
+      nextSummary.push({
+        emoji,
+        count: 1,
+        userIds: [userId],
+      });
+      return nextSummary;
+    }
+
+    const entry = nextSummary[existingIndex];
+    if (entry.userIds.includes(userId)) {
+      return nextSummary;
+    }
+
+    nextSummary[existingIndex] = {
+      ...entry,
+      count: entry.count + 1,
+      userIds: [...entry.userIds, userId],
+    };
+    return nextSummary;
+  }
+
+  if (existingIndex === -1) {
+    return nextSummary;
+  }
+
+  const entry = nextSummary[existingIndex];
+  const nextUserIds = entry.userIds.filter((existingUserId) => existingUserId !== userId);
+  if (nextUserIds.length === 0) {
+    nextSummary.splice(existingIndex, 1);
+    return nextSummary;
+  }
+
+  nextSummary[existingIndex] = {
+    ...entry,
+    count: nextUserIds.length,
+    userIds: nextUserIds,
+  };
+  return nextSummary;
+}

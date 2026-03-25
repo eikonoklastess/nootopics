@@ -7,6 +7,7 @@ import {
   requireServerMembership,
   requireServerModerator,
 } from "./lib/auth";
+import { normalizeName } from "./lib/normalize";
 
 export const create = mutation({
   args: {
@@ -29,12 +30,17 @@ export const create = mutation({
       userId: user._id,
       serverId,
       role: "ADMIN",
+      userClerkId: user.clerkId,
+      userImageUrl: user.imageUrl,
+      userName: user.name,
+      userNameNormalized: normalizeName(user.name),
     });
 
     await ctx.db.insert("channels", {
       name: "general",
       serverId,
       type: "TEXT",
+      normalizedName: normalizeName("general"),
     });
 
     return serverId;
@@ -95,6 +101,10 @@ export const join = mutation({
       userId: user._id,
       serverId: server._id,
       role: "GUEST",
+      userClerkId: user.clerkId,
+      userImageUrl: user.imageUrl,
+      userName: user.name,
+      userNameNormalized: normalizeName(user.name),
     });
 
     return server._id;

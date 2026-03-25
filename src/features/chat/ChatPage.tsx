@@ -1,5 +1,5 @@
 import { useMutation, usePaginatedQuery, useQuery } from 'convex/react';
-import { useCallback, useDeferredValue, useEffect, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useDeferredValue, useEffect, useRef, useState } from 'react';
 import { useUser } from '@clerk/clerk-react';
 import type { Id } from '../../../convex/_generated/dataModel';
 import { api } from '../../../convex/_generated/api';
@@ -14,12 +14,9 @@ import { ChatComposer } from './ChatComposer';
 import { ChatSearchBox } from './ChatSearchBox';
 import { MessageFeed } from './MessageFeed';
 import { parseSearchQuery } from './search';
-import { PinnedMessagesPanel } from './PinnedMessagesPanel';
 import { ThreadCreatorPanel } from './ThreadCreatorPanel';
-import { ThreadPanel } from './ThreadPanel';
 import { findAllTokens } from './utils';
-import { MemberListPanel } from './MemberListPanel';
-import { NotificationsPanel, type NotificationItem } from './NotificationsPanel';
+import type { NotificationItem } from './NotificationsPanel';
 import { useDesktopNotifications } from './useDesktopNotifications';
 import { toast } from 'sonner';
 import {
@@ -40,6 +37,26 @@ import type {
   ThreadReply,
 } from './types';
 import { useChannelReadTracking } from './useChannelReadTracking';
+
+const LazyPinnedMessagesPanel = lazy(async () => {
+  const module = await import('./PinnedMessagesPanel');
+  return { default: module.PinnedMessagesPanel };
+});
+
+const LazyThreadPanel = lazy(async () => {
+  const module = await import('./ThreadPanel');
+  return { default: module.ThreadPanel };
+});
+
+const LazyMemberListPanel = lazy(async () => {
+  const module = await import('./MemberListPanel');
+  return { default: module.MemberListPanel };
+});
+
+const LazyNotificationsPanel = lazy(async () => {
+  const module = await import('./NotificationsPanel');
+  return { default: module.NotificationsPanel };
+});
 
 type ConversationTarget =
   | { channelId: Id<'channels'>; directConversationId?: never }
@@ -173,6 +190,10 @@ export function ChatPage() {
           otherUser: ServerMember | null;
         }
       | undefined) ?? undefined;
+  const directUnreadCounts =
+    (useQuery(api.readPositions.getDirectUnreadCounts) as
+      | Record<string, number>
+      | undefined) ?? {};
 
   const sendMessage = useMutation(api.messages.send);
   const editMessage = useMutation(api.messages.edit);
@@ -408,6 +429,7 @@ export function ChatPage() {
       content: content.trim(),
       deleted: false,
       isEdited: false,
+      reactionSummary: [],
       replyCount: 0,
       pinned: false,
       user: {
@@ -622,7 +644,7 @@ export function ChatPage() {
             type="button"
           />
           <div className="fixed inset-y-0 left-0 z-50 flex w-[72px] md:hidden">
-            <NavigationSidebar />
+            <NavigationSidebar directUnreadCounts={directUnreadCounts} />
           </div>
         </>
       )}
@@ -636,17 +658,23 @@ export function ChatPage() {
             type="button"
           />
           <div className="fixed inset-y-0 left-0 z-50 flex w-60 md:hidden">
-            <ServerSidebar />
+            <ServerSidebar
+              directUnreadCounts={directUnreadCounts}
+              serverEmojis={serverEmojis}
+            />
           </div>
         </>
       )}
 
       <div className="hidden md:flex h-full w-[72px] z-30 flex-col fixed inset-y-0">
-        <NavigationSidebar />
+        <NavigationSidebar directUnreadCounts={directUnreadCounts} />
       </div>
 
       <div className="hidden md:flex h-full w-60 z-20 flex-col fixed inset-y-0 md:left-[72px]">
-        <ServerSidebar />
+        <ServerSidebar
+          directUnreadCounts={directUnreadCounts}
+          serverEmojis={serverEmojis}
+        />
       </div>
 
       <main
@@ -846,67 +874,76 @@ export function ChatPage() {
                   placeholder={
                     activeSpace === 'direct' ? 'Message this conversation' : 'Message this channel'
                   }
+                  serverEmojis={serverEmojis}
                   serverMembers={conversationMembers}
                 />
               </div>
 
               {showMemberList && (
-                <MemberListPanel
-                  members={conversationMembers}
-                  onClose={() => setShowMemberList(false)}
-                />
+                <Suspense fallback={<PanelFallback label="Loading members..." />}>
+                  <LazyMemberListPanel
+                    members={conversationMembers}
+                    onClose={() => setShowMemberList(false)}
+                  />
+                </Suspense>
               )}
             </div>
 
             {showNotifications && (
-              <NotificationsPanel
-                notifications={notifications}
-                onClose={() => setShowNotifications(false)}
-                onSelect={(notification) => {
-                  void handleNotificationSelect(notification);
-                }}
-              />
+              <Suspense fallback={<PanelFallback label="Loading notifications..." />}>
+                <LazyNotificationsPanel
+                  notifications={notifications}
+                  onClose={() => setShowNotifications(false)}
+                  onSelect={(notification) => {
+                    void handleNotificationSelect(notification);
+                  }}
+                />
+              </Suspense>
             )}
 
             {activeThread && (
-              <ThreadPanel
-                activeThread={activeThread}
-                customEmojiUrls={customEmojiUrls}
-                onClose={() => {
-                  setPendingReplyJumpId(null);
-                  setFlashReplyId(null);
-                  setActiveThread(null);
-                  setThreadContent('');
-                }}
-                onReplyChange={setThreadContent}
-                onReplySubmit={handleThreadReply}
-                replies={threadReplies}
-                replyValue={threadContent}
-                serverMembers={conversationMembers}
-                targetReplyId={flashReplyId}
-              />
+              <Suspense fallback={<PanelFallback label="Loading thread..." />}>
+                <LazyThreadPanel
+                  activeThread={activeThread}
+                  customEmojiUrls={customEmojiUrls}
+                  onClose={() => {
+                    setPendingReplyJumpId(null);
+                    setFlashReplyId(null);
+                    setActiveThread(null);
+                    setThreadContent('');
+                  }}
+                  onReplyChange={setThreadContent}
+                  onReplySubmit={handleThreadReply}
+                  replies={threadReplies}
+                  replyValue={threadContent}
+                  serverMembers={conversationMembers}
+                  targetReplyId={flashReplyId}
+                />
+              </Suspense>
             )}
 
             {showPinnedMessages && (
-              <PinnedMessagesPanel
-                activeChannelId={activeConversationTarget?.channelId}
-                activeDirectConversationId={activeConversationTarget?.directConversationId}
-                customEmojiUrls={customEmojiUrls}
-                onClose={() => setShowPinnedMessages(false)}
-                onJumpToMessage={(messageId) => {
-                  setMessageContext({
-                    anchorMessageId: messageId,
-                    channelId: activeConversationTarget?.channelId,
-                    directConversationId: activeConversationTarget?.directConversationId,
-                    highlightMessageId: messageId,
-                    threadReplyMessageId: null,
-                  });
-                  setFlashMessageId(messageId);
-                  setShowPinnedMessages(false);
-                }}
-                onUnpin={(messageId) => unpinMessage({ messageId })}
-                serverMembers={conversationMembers}
-              />
+              <Suspense fallback={<PanelFallback label="Loading pinned messages..." />}>
+                <LazyPinnedMessagesPanel
+                  activeChannelId={activeConversationTarget?.channelId}
+                  activeDirectConversationId={activeConversationTarget?.directConversationId}
+                  customEmojiUrls={customEmojiUrls}
+                  onClose={() => setShowPinnedMessages(false)}
+                  onJumpToMessage={(messageId) => {
+                    setMessageContext({
+                      anchorMessageId: messageId,
+                      channelId: activeConversationTarget?.channelId,
+                      directConversationId: activeConversationTarget?.directConversationId,
+                      highlightMessageId: messageId,
+                      threadReplyMessageId: null,
+                    });
+                    setFlashMessageId(messageId);
+                    setShowPinnedMessages(false);
+                  }}
+                  onUnpin={(messageId) => unpinMessage({ messageId })}
+                  serverMembers={conversationMembers}
+                />
+              </Suspense>
             )}
 
             <ThreadCreatorPanel
@@ -988,4 +1025,12 @@ function formatSize(bytes: number) {
     return `${(bytes / 1024).toFixed(1)} KB`;
   }
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function PanelFallback({ label }: { label: string }) {
+  return (
+    <div className="absolute right-4 top-14 z-40 rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-500 shadow-xl dark:border-zinc-700 dark:bg-[#2B2D31] dark:text-zinc-400">
+      {label}
+    </div>
+  );
 }

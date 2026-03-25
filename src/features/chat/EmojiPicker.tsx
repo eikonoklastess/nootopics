@@ -1,12 +1,10 @@
 import data from '@emoji-mart/data';
 import Picker from '@emoji-mart/react';
-import { useQuery } from 'convex/react';
-import { api } from '../../../convex/_generated/api';
-import { useAppStore } from '../../store/useAppStore';
 import type { ServerEmoji } from './types';
 
 interface EmojiPickerProps {
   onSelect: (value: string) => void;
+  serverEmojis: ServerEmoji[];
 }
 
 interface EmojiSelection {
@@ -15,17 +13,7 @@ interface EmojiSelection {
   native?: string;
 }
 
-export function EmojiPicker({ onSelect }: EmojiPickerProps) {
-  const { activeServerId, activeSpace } = useAppStore();
-
-  const serverEmojis =
-    (useQuery(
-      api.emojis.list,
-      activeSpace === "server" && activeServerId
-        ? { serverId: activeServerId }
-        : "skip"
-    ) as ServerEmoji[] | undefined) ?? [];
-
+export function EmojiPicker({ onSelect, serverEmojis }: EmojiPickerProps) {
   const customEmojis = serverEmojis.length > 0 ? [
     {
       id: 'custom_server_emojis',

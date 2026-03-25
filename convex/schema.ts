@@ -34,10 +34,15 @@ export default defineSchema({
     userId: v.id("users"),
     serverId: v.id("servers"),
     role: v.union(v.literal("ADMIN"), v.literal("MODERATOR"), v.literal("GUEST")),
+    userClerkId: v.optional(v.string()),
+    userName: v.optional(v.string()),
+    userImageUrl: v.optional(v.string()),
+    userNameNormalized: v.optional(v.string()),
   })
     .index("by_user_id", ["userId"])
     .index("by_server_id", ["serverId"])
-    .index("by_server_id_and_user_id", ["serverId", "userId"]),
+    .index("by_server_id_and_user_id", ["serverId", "userId"])
+    .index("by_server_id_and_user_name_normalized", ["serverId", "userNameNormalized"]),
 
   categories: defineTable({
     name: v.string(),
@@ -53,15 +58,28 @@ export default defineSchema({
     order: v.optional(v.number()),
     topLevelMessageCount: v.optional(v.number()),
     lastMessageTime: v.optional(v.number()),
+    normalizedName: v.optional(v.string()),
   })
     .index("by_server_id", ["serverId"])
-    .index("by_server_id_and_category_id", ["serverId", "categoryId"]),
+    .index("by_server_id_and_category_id", ["serverId", "categoryId"])
+    .index("by_server_id_and_normalized_name", ["serverId", "normalizedName"]),
 
   directConversations: defineTable({
     pairKey: v.string(),
     topLevelMessageCount: v.optional(v.number()),
     lastMessageTime: v.optional(v.number()),
-  }).index("by_pair_key", ["pairKey"]),
+    leftUserId: v.optional(v.id("users")),
+    leftUserName: v.optional(v.string()),
+    leftUserImageUrl: v.optional(v.string()),
+    leftUserClerkId: v.optional(v.string()),
+    rightUserId: v.optional(v.id("users")),
+    rightUserName: v.optional(v.string()),
+    rightUserImageUrl: v.optional(v.string()),
+    rightUserClerkId: v.optional(v.string()),
+  })
+    .index("by_pair_key", ["pairKey"])
+    .index("by_left_user_id", ["leftUserId"])
+    .index("by_right_user_id", ["rightUserId"]),
 
   directConversationMembers: defineTable({
     directConversationId: v.id("directConversations"),
@@ -89,6 +107,11 @@ export default defineSchema({
       size: v.number(),
     }))),
     pinned: v.optional(v.boolean()),
+    reactionSummary: v.optional(v.array(v.object({
+      emoji: v.string(),
+      count: v.number(),
+      userIds: v.array(v.id("users")),
+    }))),
   })
     .index("by_channel_id", ["channelId"])
     .index("by_channel_id_and_pinned", ["channelId", "pinned"])
@@ -154,11 +177,50 @@ export default defineSchema({
     directConversationId: v.optional(v.id("directConversations")),
     type: v.union(v.literal("MENTION"), v.literal("DIRECT_MESSAGE")),
     read: v.boolean(),
+    authorName: v.optional(v.string()),
+    messagePreview: v.optional(v.string()),
   })
     .index("by_user_id", ["userId"])
     .index("by_user_id_and_read", ["userId", "read"])
     .index("by_channel_id", ["channelId"])
     .index("by_direct_conversation_id", ["directConversationId"])
     .index("by_message_id", ["messageId"]),
-  
+
+  presence: defineTable({
+    userId: v.id("users"),
+    status: v.union(v.literal("ONLINE"), v.literal("IDLE"), v.literal("DND"), v.literal("OFFLINE")),
+    lastSeen: v.number(),
+  }).index("by_user_id", ["userId"]),
+
+  messageSearchDigests: defineTable({
+    messageId: v.id("messages"),
+    serverId: v.id("servers"),
+    channelId: v.id("channels"),
+    userId: v.id("users"),
+    content: v.string(),
+    createdAt: v.number(),
+    hasFiles: v.boolean(),
+    hasImage: v.boolean(),
+    hasVideo: v.boolean(),
+    hasAudio: v.boolean(),
+    hasReplies: v.boolean(),
+    isReply: v.boolean(),
+    deleted: v.boolean(),
+  })
+    .index("by_message_id", ["messageId"])
+    .index("by_server_id_and_created_at", ["serverId", "createdAt"])
+    .searchIndex("search_content", {
+      searchField: "content",
+      filterFields: [
+        "serverId",
+        "channelId",
+        "userId",
+        "hasFiles",
+        "hasImage",
+        "hasVideo",
+        "hasAudio",
+        "hasReplies",
+        "isReply",
+      ],
+    }),
 });

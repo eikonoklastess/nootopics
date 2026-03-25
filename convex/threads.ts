@@ -2,6 +2,7 @@ import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { requireThreadParentAccess } from "./lib/auth";
 import { countThreadReplies, resolveUsersById } from "./lib/messages";
+import { upsertMessageSearchDigest } from "./lib/searchDigests";
 
 const conversationArgs = {
   channelId: v.optional(v.id("channels")),
@@ -66,6 +67,7 @@ export const reply = mutation({
       replyCount: 0,
       threadId: args.threadId,
       files: args.files,
+      reactionSummary: [],
       ...(parentChannelId
         ? {
             channelId: parentChannelId,
@@ -81,6 +83,10 @@ export const reply = mutation({
     await ctx.db.patch(access.message._id, {
       replyCount: currentReplyCount + 1,
     });
+    const updatedParent = await ctx.db.get(access.message._id);
+    if (updatedParent) {
+      await upsertMessageSearchDigest(ctx, updatedParent);
+    }
 
     if (access.kind === "channel") {
       await ctx.db.patch(access.channel._id, {
@@ -90,6 +96,11 @@ export const reply = mutation({
       await ctx.db.patch(access.directConversation._id, {
         lastMessageTime: Date.now(),
       });
+    }
+
+    const insertedReply = await ctx.db.get(replyId);
+    if (insertedReply) {
+      await upsertMessageSearchDigest(ctx, insertedReply);
     }
 
     return replyId;

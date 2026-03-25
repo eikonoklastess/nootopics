@@ -762,58 +762,88 @@ export function ChatPage() {
               )}
             </header>
 
-            <MessageFeed
-              cancelEditing={() => {
-                setEditingId(null);
-                setEditContent('');
-              }}
-              customEmojiUrls={customEmojiUrls}
-              currentUserClerkId={clerkUser?.id}
-              editContent={editContent}
-              editingId={editingId}
-              formatSize={formatSize}
-              isLoadingMore={paginateStatus === 'LoadingMore'}
-              lastReadSnapshot={lastReadSnapshot}
-              messages={allMessages}
-              onDelete={(messageId) => setDeleteTargetId(messageId)}
-              onPin={(messageId) => pinMessage({ messageId })}
-              onUnpin={(messageId) => unpinMessage({ messageId })}
-              onEditContentChange={setEditContent}
-              onLoadMore={
-                !anchoredMessages && paginateStatus === 'CanLoadMore'
-                  ? () => loadMore(50)
-                  : undefined
-              }
-              onOpenThread={(message) => {
-                setPendingReplyJumpId(null);
-                setFlashReplyId(null);
-                setActiveThread(message);
-                setShowThreadCreator(false);
-              }}
-              onStartEditing={(message) => {
-                setEditingId(message._id);
-                setEditContent(message.content);
-              }}
-              onSubmitEdit={handleEdit}
-              serverMembers={conversationMembers}
-              targetMessageId={flashMessageId}
-            />
+            <div className="flex flex-1 overflow-hidden relative">
+              <div className="flex flex-col flex-1 min-w-0">
+                <MessageFeed
+                  cancelEditing={() => {
+                    setEditingId(null);
+                    setEditContent('');
+                  }}
+                  customEmojiUrls={customEmojiUrls}
+                  currentUserClerkId={clerkUser?.id}
+                  editContent={editContent}
+                  editingId={editingId}
+                  formatSize={formatSize}
+                  isLoadingMore={paginateStatus === 'LoadingMore'}
+                  paginateStatus={paginateStatus}
+                  lastReadSnapshot={lastReadSnapshot}
+                  messages={allMessages}
+                  onDelete={(messageId) => setDeleteTargetId(messageId)}
+                  onPin={(messageId) => pinMessage({ messageId })}
+                  onUnpin={(messageId) => unpinMessage({ messageId })}
+                  onEditContentChange={setEditContent}
+                  onLoadMore={
+                    !anchoredMessages && paginateStatus === 'CanLoadMore'
+                      ? () => loadMore(50)
+                      : undefined
+                  }
+                  onOpenThread={(message) => {
+                    setPendingReplyJumpId(null);
+                    setFlashReplyId(null);
+                    setActiveThread(message);
+                    setShowThreadCreator(false);
+                  }}
+                  onStartEditing={(message) => {
+                    setEditingId(message._id);
+                    setEditContent(message.content);
+                  }}
+                  onSubmitEdit={handleEdit}
+                  serverMembers={conversationMembers}
+                  targetMessageId={flashMessageId}
+                />
 
-            {typers.length > 0 && (
-              <div className="px-6 py-1 shrink-0 flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400 animate-pulse">
-                <div className="flex items-center gap-1">
-                  <span className="inline-flex gap-0.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 dark:bg-zinc-500 animate-bounce" style={{ animationDelay: '0ms' }} />
-                    <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 dark:bg-zinc-500 animate-bounce" style={{ animationDelay: '150ms' }} />
-                    <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 dark:bg-zinc-500 animate-bounce" style={{ animationDelay: '300ms' }} />
-                  </span>
-                </div>
-                <span className="font-semibold">
-                  {typers.map((typer: { name: string }) => typer.name).join(', ')}
-                </span>
-                <span>{typers.length === 1 ? 'is' : 'are'} typing...</span>
+                {typers.length > 0 && (
+                  <div className="px-6 py-1 shrink-0 flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400 animate-pulse">
+                    <div className="flex items-center gap-1">
+                      <span className="inline-flex gap-0.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 dark:bg-zinc-500 animate-bounce" style={{ animationDelay: '0ms' }} />
+                        <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 dark:bg-zinc-500 animate-bounce" style={{ animationDelay: '150ms' }} />
+                        <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 dark:bg-zinc-500 animate-bounce" style={{ animationDelay: '300ms' }} />
+                      </span>
+                    </div>
+                    <span className="font-semibold">
+                      {typers.map((typer: { name: string }) => typer.name).join(', ')}
+                    </span>
+                    <span>{typers.length === 1 ? 'is' : 'are'} typing...</span>
+                  </div>
+                )}
+
+                <ChatComposer
+                  content={content}
+                  errorMessage={fileUpload.error}
+                  fileUpload={fileUpload}
+                  isUploading={fileUpload.isUploading}
+                  onContentChange={setContent}
+                  onOpenThreadCreator={() => {
+                    setActiveThread(null);
+                    setShowThreadCreator(true);
+                  }}
+                  onSend={handleSend}
+                  onTyping={handleTyping}
+                  placeholder={
+                    activeSpace === 'direct' ? 'Message this conversation' : 'Message this channel'
+                  }
+                  serverMembers={conversationMembers}
+                />
               </div>
-            )}
+
+              {showMemberList && (
+                <MemberListPanel
+                  members={conversationMembers}
+                  onClose={() => setShowMemberList(false)}
+                />
+              )}
+            </div>
 
             {showNotifications && (
               <NotificationsPanel
@@ -824,31 +854,6 @@ export function ChatPage() {
                 }}
               />
             )}
-
-            {showMemberList && (
-              <MemberListPanel
-                members={conversationMembers}
-                onClose={() => setShowMemberList(false)}
-              />
-            )}
-
-            <ChatComposer
-              content={content}
-              errorMessage={fileUpload.error}
-              fileUpload={fileUpload}
-              isUploading={fileUpload.isUploading}
-              onContentChange={setContent}
-              onOpenThreadCreator={() => {
-                setActiveThread(null);
-                setShowThreadCreator(true);
-              }}
-              onSend={handleSend}
-              onTyping={handleTyping}
-              placeholder={
-                activeSpace === 'direct' ? 'Message this conversation' : 'Message this channel'
-              }
-              serverMembers={conversationMembers}
-            />
 
             {activeThread && (
               <ThreadPanel

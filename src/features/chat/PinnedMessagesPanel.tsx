@@ -103,7 +103,7 @@ export function PinnedMessagesPanel({
                 </div>
                 
                 <div className="pl-9 pr-2">
-                  <p className="text-[13px] text-zinc-700 dark:text-zinc-300 leading-relaxed break-words break-all">
+                  <p className="text-[13px] text-zinc-700 dark:text-zinc-300 leading-relaxed break-words break-all whitespace-pre-wrap">
                     {msg.deleted
                       ? 'Message deleted'
                       : renderMessageText(

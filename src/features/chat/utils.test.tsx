@@ -63,8 +63,8 @@ describe('chat utils', () => {
   });
 
   it('computes the unread divider position from a frozen snapshot', () => {
-    expect(shouldShowUnreadDivider(messages, 0, 150)).toBe(false);
-    expect(shouldShowUnreadDivider(messages, 1, 150)).toBe(true);
+    expect(shouldShowUnreadDivider(messages, 0, 150, 'clerk_a')).toBe(false);
+    expect(shouldShowUnreadDivider(messages, 1, 150, 'clerk_a')).toBe(true);
   });
 
   it('formats deleted thread messages safely', () => {

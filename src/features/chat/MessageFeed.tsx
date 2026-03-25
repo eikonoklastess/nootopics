@@ -25,6 +25,7 @@ interface MessageFeedProps {
   editingId: ChatMessage['_id'] | null;
   formatSize: (bytes: number) => string;
   isLoadingMore?: boolean;
+  paginateStatus?: string;
   lastReadSnapshot: number | null;
   messages: ChatMessage[];
   onDelete: (messageId: ChatMessage['_id']) => void;
@@ -47,6 +48,7 @@ export function MessageFeed({
   editingId,
   formatSize,
   isLoadingMore,
+  paginateStatus,
   lastReadSnapshot,
   messages,
   onDelete,
@@ -103,7 +105,7 @@ export function MessageFeed({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [lightboxUrl]);
 
-  if (messages.length === 0) {
+  if (messages.length === 0 && paginateStatus === 'LoadingFirstPage') {
     return (
       <div className="flex-1 overflow-y-auto">
         <MessageSkeleton />
@@ -198,7 +200,7 @@ export function MessageFeed({
                       <span>Pinned</span>
                     </div>
                   )}
-                  <p className="text-[15px] text-zinc-700 dark:text-zinc-300 leading-relaxed break-words">
+                  <p className="text-[15px] text-zinc-700 dark:text-zinc-300 leading-relaxed break-words whitespace-pre-wrap">
                     {message.deleted
                       ? 'Message deleted'
                       : renderMessageText(
@@ -483,7 +485,7 @@ export function MessageFeed({
               messageRefs.current[message._id] = element;
             }}
           >
-            {shouldShowUnreadDivider(messages, index, lastReadSnapshot) && (
+            {shouldShowUnreadDivider(messages, index, lastReadSnapshot, currentUserClerkId) && (
               <div className="flex items-center gap-2 my-4">
                 <div className="flex-1 h-px bg-rose-500/70" />
                 <span className="text-[11px] font-bold uppercase text-rose-500 shrink-0">

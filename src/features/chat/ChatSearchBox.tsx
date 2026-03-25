@@ -155,7 +155,7 @@ export function ChatSearchBox({
                       </div>
                     </div>
 
-                    <p className="text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
+                    <p className="text-sm leading-relaxed text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap break-words line-clamp-2">
                       {renderHighlightedSnippet(
                         buildSearchSnippet(result.content, parsedQuery.terms),
                         parsedQuery.terms,

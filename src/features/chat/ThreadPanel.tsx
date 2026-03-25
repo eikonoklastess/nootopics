@@ -74,7 +74,7 @@ export function ThreadPanel({
                 })}
               </span>
             </div>
-            <p className="text-sm text-zinc-700 dark:text-zinc-300">
+            <p className="text-sm text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap break-words">
               {activeThread.deleted
                 ? 'Message deleted'
                 : renderMessageText(
@@ -113,7 +113,7 @@ export function ThreadPanel({
                     })}
                   </span>
                 </div>
-                <p className="text-[13px] text-zinc-700 dark:text-zinc-300">
+                <p className="text-[13px] text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap break-words">
                   {reply.deleted
                     ? 'Message deleted'
                     : renderMessageText(

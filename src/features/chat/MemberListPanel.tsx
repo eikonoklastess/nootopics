@@ -59,7 +59,7 @@ export function MemberListPanel({ members, onClose }: MemberListPanelProps) {
   }, [members]);
 
   return (
-    <div className="absolute inset-0 md:left-auto md:right-0 md:top-0 md:bottom-0 w-full md:w-60 bg-white dark:bg-[#2B2D31] border-l border-zinc-200 dark:border-zinc-700 flex flex-col z-30">
+    <div className="absolute inset-0 md:relative md:inset-auto w-full md:w-60 bg-white dark:bg-[#2B2D31] border-l border-zinc-200 dark:border-zinc-700 flex flex-col z-30 shrink-0">
       <div className="h-12 shrink-0 flex items-center justify-between border-b border-zinc-200 dark:border-zinc-700 px-4">
         <h2 className="text-base font-semibold">Members</h2>
         <button

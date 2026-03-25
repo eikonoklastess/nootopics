@@ -451,13 +451,14 @@ export function shouldShowUnreadDivider(
   messages: ChatMessage[],
   index: number,
   lastReadSnapshot: number | null,
+  currentUserClerkId: string | undefined,
 ) {
-  if (lastReadSnapshot === null || lastReadSnapshot <= 0) {
+  if (lastReadSnapshot === null || lastReadSnapshot <= 0 || !currentUserClerkId) {
     return false;
   }
 
   const message = messages[index];
-  if (!message || message._creationTime <= lastReadSnapshot) {
+  if (!message || message._creationTime <= lastReadSnapshot || message.user?.clerkId === currentUserClerkId) {
     return false;
   }
 

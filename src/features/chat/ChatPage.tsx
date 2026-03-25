@@ -643,7 +643,7 @@ export function ChatPage() {
         onDragOver={handleDragOver}
         onDrop={handleDrop}
       >
-        <div className="flex h-12 items-center justify-between border-b border-neutral-200 px-3 shadow-sm dark:border-neutral-800 md:hidden">
+        <div className="flex min-h-[3.5rem] pt-[env(safe-area-inset-top)] items-center justify-between border-b border-neutral-200 px-3 shadow-sm dark:border-neutral-800 md:hidden">
           <button
             className="rounded-md p-2 text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-800 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
             onClick={() => setShowMobileNavigation(true)}

@@ -18,7 +18,7 @@ export const Route = createRootRoute({
       },
       {
         name: 'viewport',
-        content: 'width=device-width, initial-scale=1',
+        content: 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0',
       },
       {
         title: 'Nootopics',
@@ -41,7 +41,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         <HeadContent />
       </head>
-      <body className="font-sans antialiased h-screen w-full m-0 p-0 overflow-hidden bg-white dark:bg-[#313338] text-black dark:text-white">
+      <body className="font-sans antialiased h-dvh w-full m-0 p-0 overflow-hidden bg-white dark:bg-[#313338] text-black dark:text-white">
         <ClerkProvider>
           <TooltipProvider>
             {children}

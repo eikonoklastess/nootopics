@@ -58,7 +58,7 @@ export function NavigationSidebar() {
   };
 
   return (
-    <div className="flex flex-col items-center h-full text-primary w-full bg-[#E3E5E8] dark:bg-[#1E1F22] py-3 shadow-md z-50">
+    <div className="flex flex-col items-center h-full text-primary w-full bg-[#E3E5E8] dark:bg-[#1E1F22] py-3 pt-[calc(0.75rem+env(safe-area-inset-top))] pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-md z-50">
       {/* Clerk Profile */}
       <div className="pt-2 flex flex-col items-center hover:opacity-80 transition cursor-pointer">
          <UserButton afterSignOutUrl="/" appearance={{ elements: { avatarBox: "h-[48px] w-[48px] shadow-sm" } }} />

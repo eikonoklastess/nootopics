@@ -204,7 +204,7 @@ export function ChatComposer({
   };
 
   return (
-    <div className="px-6 py-4 shrink-0 mt-auto bg-white dark:bg-[#313338] sticky bottom-0 relative">
+    <div className="px-4 md:px-6 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shrink-0 mt-auto bg-white dark:bg-[#313338] sticky bottom-0 relative">
       <input
         ref={fileInputRef}
         type="file"
@@ -253,7 +253,7 @@ export function ChatComposer({
           <textarea
             ref={inputRef}
             rows={1}
-            className="flex-1 bg-transparent border-none outline-none text-zinc-800 dark:text-zinc-200 font-medium placeholder-zinc-500 dark:placeholder-zinc-400 resize-none max-h-[200px] leading-normal"
+            className="flex-1 bg-transparent border-none outline-none text-base md:text-sm text-zinc-800 dark:text-zinc-200 font-medium placeholder-zinc-500 dark:placeholder-zinc-400 resize-none max-h-[200px] leading-normal"
             placeholder={isUploading ? 'Uploading...' : placeholder ?? 'Message this channel'}
             value={content}
             disabled={isUploading}

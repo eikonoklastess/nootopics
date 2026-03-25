@@ -340,7 +340,7 @@ export function ServerSidebar() {
   }
 
   return (
-    <div className="flex flex-col h-full text-primary w-full dark:bg-[#2B2D31] bg-[#F2F3F5] shadow-sm relative">
+    <div className="flex flex-col h-full text-primary w-full dark:bg-[#2B2D31] bg-[#F2F3F5] shadow-sm relative pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
       <div 
         className="w-full text-md font-bold px-4 flex flex-col justify-center h-[60px] border-neutral-200 dark:border-zinc-900 border-b hover:bg-zinc-700/10 dark:hover:bg-zinc-700/50 transition cursor-pointer shadow-sm z-20"
         onClick={() => setIsServerDropdownOpen(!isServerDropdownOpen)}

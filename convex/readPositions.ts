@@ -81,22 +81,18 @@ export const getUnreadCounts = query({
     const channels = await ctx.db
       .query("channels")
       .withIndex("by_server_id", (q) => q.eq("serverId", args.serverId))
-      .take(100);
-    const readPositions = await ctx.db
-      .query("readPositions")
-      .withIndex("by_user_id", (q) => q.eq("userId", user._id))
-      .take(300);
-
-    const readMap = new Map(
-      readPositions
-        .filter((position) => position.channelId)
-        .map((position) => [position.channelId, position] as const),
-    );
+      .collect();
 
     const counts: Record<string, number> = {};
 
     for (const channel of channels) {
-      const readPosition = readMap.get(channel._id);
+      const readPosition = await ctx.db
+        .query("readPositions")
+        .withIndex("by_user_id_and_channel_id", (q) =>
+          q.eq("userId", user._id).eq("channelId", channel._id)
+        )
+        .unique();
+
       const unreadFromCounters = computeUnreadCountFromCounters(
         channel.topLevelMessageCount,
         readPosition?.lastReadTopLevelMessageCount,
@@ -132,17 +128,7 @@ export const getDirectUnreadCounts = query({
     const memberships = await ctx.db
       .query("directConversationMembers")
       .withIndex("by_user_id", (q) => q.eq("userId", user._id))
-      .take(100);
-    const readPositions = await ctx.db
-      .query("readPositions")
-      .withIndex("by_user_id", (q) => q.eq("userId", user._id))
-      .take(300);
-
-    const readMap = new Map(
-      readPositions
-        .filter((position) => position.directConversationId)
-        .map((position) => [position.directConversationId, position] as const),
-    );
+      .collect();
 
     const counts: Record<string, number> = {};
 
@@ -152,7 +138,13 @@ export const getDirectUnreadCounts = query({
         continue;
       }
 
-      const readPosition = readMap.get(directConversation._id);
+      const readPosition = await ctx.db
+        .query("readPositions")
+        .withIndex("by_user_id_and_direct_conversation_id", (q) =>
+          q.eq("userId", user._id).eq("directConversationId", directConversation._id)
+        )
+        .unique();
+
       const unreadFromCounters = computeUnreadCountFromCounters(
         directConversation.topLevelMessageCount,
         readPosition?.lastReadTopLevelMessageCount,

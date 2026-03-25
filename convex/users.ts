@@ -20,7 +20,7 @@ export const listByServer = query({
     const members = await ctx.db
       .query("members")
       .withIndex("by_server_id", (q) => q.eq("serverId", args.serverId))
-      .take(100);
+      .collect();
 
     return await Promise.all(
       members.map(async (member) => {
@@ -107,14 +107,14 @@ export const listDirectMessageCandidates = query({
     const memberships = await ctx.db
       .query("members")
       .withIndex("by_user_id", (q) => q.eq("userId", currentUser._id))
-      .take(100);
+      .collect();
     const candidateIds = new Set<typeof currentUser._id>();
 
     for (const membership of memberships) {
       const serverMembers = await ctx.db
         .query("members")
         .withIndex("by_server_id", (q) => q.eq("serverId", membership.serverId))
-        .take(200);
+        .take(1000);
       for (const serverMember of serverMembers) {
         if (serverMember.userId !== currentUser._id) {
           candidateIds.add(serverMember.userId);

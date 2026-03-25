@@ -1,3 +1,4 @@
+import { internal } from "./_generated/api";
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import {
@@ -53,7 +54,7 @@ export const list = query({
     const memberships = await ctx.db
       .query("members")
       .withIndex("by_user_id", (q) => q.eq("userId", user._id))
-      .take(100);
+      .collect();
 
     const servers = await Promise.all(
       memberships.map((membership) => ctx.db.get(membership.serverId)),
@@ -145,7 +146,7 @@ export const updateMemberRole = mutation({
       const adminMemberships = await ctx.db
         .query("members")
         .withIndex("by_server_id", (q) => q.eq("serverId", args.serverId))
-        .take(100);
+        .collect();
       const adminCount = adminMemberships.filter((member) => member.role === "ADMIN").length;
       if (adminCount <= 1) {
         throw new Error("A server must keep at least one admin");
@@ -208,6 +209,9 @@ export const remove = mutation({
       .take(500);
     for (const channel of channels) {
       await ctx.db.delete(channel._id);
+      await ctx.scheduler.runAfter(0, internal.channels.cleanupRemovedChannelData, {
+        channelId: channel._id,
+      });
     }
 
     const categories = await ctx.db
@@ -216,6 +220,15 @@ export const remove = mutation({
       .take(500);
     for (const category of categories) {
       await ctx.db.delete(category._id);
+    }
+
+    const emojis = await ctx.db
+      .query("emojis")
+      .withIndex("by_server_id", (q) => q.eq("serverId", args.serverId))
+      .take(500);
+    for (const emoji of emojis) {
+      await ctx.storage.delete(emoji.storageId);
+      await ctx.db.delete(emoji._id);
     }
 
     await ctx.db.delete(args.serverId);

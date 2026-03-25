@@ -435,8 +435,9 @@ export function ChatPage() {
       if (typingTimer.current) {
         clearTimeout(typingTimer.current);
       }
-    } catch {
+    } catch (error) {
       setPendingMessages((prev) => prev.filter((m) => m._id !== tempId));
+      toast.error(error instanceof Error ? error.message : 'Failed to send message');
     }
   };
 
@@ -446,12 +447,16 @@ export function ChatPage() {
       return;
     }
 
-    await threadReply({
-      ...activeConversationTarget,
-      threadId: activeThread._id,
-      content: threadContent.trim(),
-    });
-    setThreadContent('');
+    try {
+      await threadReply({
+        ...activeConversationTarget,
+        threadId: activeThread._id,
+        content: threadContent.trim(),
+      });
+      setThreadContent('');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to send reply');
+    }
   };
 
   const handleCreateThread = async (event: React.FormEvent) => {
@@ -460,14 +465,18 @@ export function ChatPage() {
       return;
     }
 
-    const parentId = await sendMessage({
-      ...activeConversationTarget,
-      content: `🧵 **${threadName.trim()}**\n${threadFirstMessage.trim()}`,
-    });
-    setPendingThreadParentId(parentId);
-    setShowThreadCreator(false);
-    setThreadName('');
-    setThreadFirstMessage('');
+    try {
+      const parentId = await sendMessage({
+        ...activeConversationTarget,
+        content: `🧵 **${threadName.trim()}**\n${threadFirstMessage.trim()}`,
+      });
+      setPendingThreadParentId(parentId);
+      setShowThreadCreator(false);
+      setThreadName('');
+      setThreadFirstMessage('');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to create thread');
+    }
   };
 
   const handleEdit = async (event: React.FormEvent) => {
@@ -476,12 +485,16 @@ export function ChatPage() {
       return;
     }
 
-    await editMessage({
-      messageId: editingId,
-      content: editContent,
-    });
-    setEditingId(null);
-    setEditContent('');
+    try {
+      await editMessage({
+        messageId: editingId,
+        content: editContent,
+      });
+      setEditingId(null);
+      setEditContent('');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to edit message');
+    }
   };
 
   const handleDelete = async (messageId: Id<'messages'>) => {

@@ -31,7 +31,7 @@ function groupReactionsByEmoji(
 export const list = query({
   args: { messageId: v.id("messages") },
   handler: async (ctx, args) => {
-    await requireCurrentUser(ctx);
+    await requireMessageAccess(ctx, args.messageId);
     const reactions = await ctx.db
       .query("reactions")
       .withIndex("by_message_id", (q) => q.eq("messageId", args.messageId))
@@ -74,9 +74,13 @@ export const toggle = mutation({
 export const listForMessages = query({
   args: { messageIds: v.array(v.id("messages")) },
   handler: async (ctx, args) => {
-    await requireCurrentUser(ctx);
     const result: Record<string, GroupedReaction[]> = {};
     for (const messageId of args.messageIds) {
+      try {
+        await requireMessageAccess(ctx, messageId);
+      } catch {
+        continue;
+      }
       const reactions = await ctx.db
         .query("reactions")
         .withIndex("by_message_id", (q) => q.eq("messageId", messageId))

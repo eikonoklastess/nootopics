@@ -85,6 +85,15 @@ export const cleanupRemovedChannelData = internalMutation({
       for (const file of message.files ?? []) {
         await ctx.storage.delete(file.storageId);
       }
+      
+      const reactions = await ctx.db
+        .query("reactions")
+        .withIndex("by_message_id", (q) => q.eq("messageId", message._id))
+        .collect();
+      for (const reaction of reactions) {
+        await ctx.db.delete(reaction._id);
+      }
+
       await ctx.db.delete(message._id);
     }
 

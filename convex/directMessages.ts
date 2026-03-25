@@ -83,6 +83,24 @@ export const createOrGet = mutation({
       throw new Error("User not found");
     }
 
+    const userMemberships = await ctx.db
+      .query("members")
+      .withIndex("by_user_id", (q) => q.eq("userId", user._id))
+      .collect();
+    
+    const otherUserMemberships = await ctx.db
+      .query("members")
+      .withIndex("by_user_id", (q) => q.eq("userId", otherUser._id))
+      .collect();
+
+    const sharedServer = userMemberships.some(m1 => 
+      otherUserMemberships.some(m2 => m1.serverId === m2.serverId)
+    );
+
+    if (!sharedServer) {
+      throw new Error("You must share a server with this user to direct message them");
+    }
+
     const pairKey = buildPairKey(user._id, otherUser._id);
     const existing = await ctx.db
       .query("directConversations")

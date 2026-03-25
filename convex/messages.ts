@@ -337,6 +337,31 @@ export const remove = mutation({
       isEdited: false,
       files: [],
     });
+
+    if (message.parentMessageId) {
+      const parent = await ctx.db.get(message.parentMessageId);
+      if (parent && parent.replyCount !== undefined && parent.replyCount > 0) {
+        await ctx.db.patch(parent._id, {
+          replyCount: parent.replyCount - 1,
+        });
+      }
+    } else {
+      if (message.channelId) {
+        const channel = await ctx.db.get(message.channelId);
+        if (channel && channel.topLevelMessageCount !== undefined && channel.topLevelMessageCount > 0) {
+          await ctx.db.patch(channel._id, {
+            topLevelMessageCount: channel.topLevelMessageCount - 1,
+          });
+        }
+      } else if (message.directConversationId) {
+        const dm = await ctx.db.get(message.directConversationId);
+        if (dm && dm.topLevelMessageCount !== undefined && dm.topLevelMessageCount > 0) {
+          await ctx.db.patch(dm._id, {
+            topLevelMessageCount: dm.topLevelMessageCount - 1,
+          });
+        }
+      }
+    }
   },
 });
 

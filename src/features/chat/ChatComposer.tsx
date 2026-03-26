@@ -193,6 +193,10 @@ export function ChatComposer({
     }
   };
 
+  useEffect(() => {
+    resizeTextarea();
+  }, [content]);
+
   const handlePaste = (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const files: File[] = [];
     for (const item of Array.from(event.clipboardData.items)) {

@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useConvex } from "convex/react";
 import { api } from "../../../convex/_generated/api";
-import { Id } from "../../../convex/_generated/dataModel";
+import type { Id } from "../../../convex/_generated/dataModel";
 
 export function useLiveKitToken(serverId: Id<"servers">, channelId: Id<"channels">) {
   const convex = useConvex();

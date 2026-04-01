@@ -1,5 +1,6 @@
 import { useMutation, useQuery } from "convex/react";
 import { useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { api } from "../../convex/_generated/api";
 import { useAppStore } from "../store/useAppStore";
 import type {
@@ -34,6 +35,7 @@ export function ServerSidebar({
   directUnreadCounts,
   serverEmojis,
 }: ServerSidebarProps) {
+  const navigate = useNavigate();
   const {
     activeSpace,
     activeServerId,
@@ -95,6 +97,7 @@ export function ServerSidebar({
   const [isDirectDialogOpen, setIsDirectDialogOpen] = useState(false);
   const [isEmojiDialogOpen, setIsEmojiDialogOpen] = useState(false);
   const [newChannelName, setNewChannelName] = useState("");
+  const [newChannelType, setNewChannelType] = useState<"TEXT" | "AUDIO">("TEXT");
   const [directSearch, setDirectSearch] = useState("");
   const [newEmojiName, setNewEmojiName] = useState("");
   const [emojiFile, setEmojiFile] = useState<File | null>(null);
@@ -159,9 +162,10 @@ export function ServerSidebar({
     await createChannel({
       serverId: activeServerId,
       name: newChannelName.toLowerCase().replace(/\s+/g, "-"),
-      type: "TEXT",
+      type: newChannelType,
     });
     setNewChannelName("");
+    setNewChannelType("TEXT");
     setIsChannelDialogOpen(false);
   };
 
@@ -443,9 +447,20 @@ export function ServerSidebar({
             </DialogHeader>
             <div className="space-y-4 mt-2">
               <div className="space-y-2">
+                <label className="text-xs font-bold uppercase text-zinc-600 dark:text-zinc-400">Channel Type</label>
+                <div className="flex gap-2 text-sm font-semibold">
+                  <button onClick={() => setNewChannelType("TEXT")} className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-md transition ${newChannelType === "TEXT" ? "bg-indigo-500/20 text-indigo-500 border border-indigo-500/50" : "bg-zinc-100 dark:bg-[#1E1F22] text-zinc-600 dark:text-zinc-400 border border-transparent hover:bg-zinc-200 dark:hover:bg-zinc-800"}`}>
+                     <span className="text-xl">#</span> Text
+                  </button>
+                  <button onClick={() => setNewChannelType("AUDIO")} className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-md transition ${newChannelType === "AUDIO" ? "bg-indigo-500/20 text-indigo-500 border border-indigo-500/50" : "bg-zinc-100 dark:bg-[#1E1F22] text-zinc-600 dark:text-zinc-400 border border-transparent hover:bg-zinc-200 dark:hover:bg-zinc-800"}`}>
+                     <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zM17.3 11c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/></svg> Voice
+                  </button>
+                </div>
+              </div>
+              <div className="space-y-2">
                 <label className="text-xs font-bold uppercase text-zinc-600 dark:text-zinc-400">Channel Name</label>
-                <div className="relative">
-                  <span className="absolute left-3 top-2 text-zinc-500 text-lg">#</span>
+                <div className="relative flex items-center">
+                  <span className="absolute left-3 text-zinc-500 flex items-center">{newChannelType === "TEXT" ? <span className="text-lg">#</span> : <svg className="w-4 h-4 ml-[2px]" fill="currentColor" viewBox="0 0 24 24"><path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/></svg>}</span>
                   <Input
                     value={newChannelName}
                     onChange={(e) => setNewChannelName(e.target.value)}
@@ -466,10 +481,14 @@ export function ServerSidebar({
           <button
             type="button"
             key={channel._id}
-            onClick={() => setActiveChannelId(channel._id)}
-            className={`group px-2 py-2 rounded-md flex items-center gap-x-2 w-full hover:bg-zinc-700/10 dark:hover:bg-zinc-700/50 transition cursor-pointer text-left ${activeChannelId === channel._id ? "bg-zinc-700/20 dark:bg-zinc-700/50 text-indigo-600 dark:text-white" : "text-zinc-500 dark:text-zinc-400"}`}
+            onClick={() => channel.type === "AUDIO" ? navigate({ to: '/server/$serverId/voice/$channelId', params: { serverId: activeServerId!, channelId: channel._id } }) : setActiveChannelId(channel._id)}
+            className={`group px-2 py-2 rounded-md flex items-center gap-x-2 w-full hover:bg-zinc-700/10 dark:hover:bg-zinc-700/50 transition cursor-pointer text-left ${activeChannelId === channel._id && channel.type !== "AUDIO" ? "bg-zinc-700/20 dark:bg-zinc-700/50 text-indigo-600 dark:text-white" : "text-zinc-500 dark:text-zinc-400"}`}
           >
-            <span className="opacity-70 text-lg">#</span>
+            {channel.type === "AUDIO" ? (
+              <svg className="w-4 h-4 opacity-70" fill="currentColor" viewBox="0 0 24 24"><path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3zM17.3 11c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/></svg>
+            ) : (
+              <span className="opacity-70 text-lg">#</span>
+            )}
             <p className={`line-clamp-1 font-semibold text-[15px] transition group-hover:text-zinc-600 dark:group-hover:text-zinc-300 flex-1 ${activeChannelId === channel._id ? "text-zinc-800 dark:text-zinc-100" : ""}`}>
               {channel.name}
             </p>
@@ -510,10 +529,14 @@ export function ServerSidebar({
                 <button
                   type="button"
                   key={channel._id}
-                  onClick={() => setActiveChannelId(channel._id)}
-                  className={`group px-2 py-2 rounded-md flex items-center gap-x-2 w-full hover:bg-zinc-700/10 dark:hover:bg-zinc-700/50 transition cursor-pointer text-left ${activeChannelId === channel._id ? "bg-zinc-700/20 dark:bg-zinc-700/50 text-indigo-600 dark:text-white" : "text-zinc-500 dark:text-zinc-400"}`}
+                  onClick={() => channel.type === "AUDIO" ? navigate({ to: '/server/$serverId/voice/$channelId', params: { serverId: activeServerId!, channelId: channel._id } }) : setActiveChannelId(channel._id)}
+                  className={`group px-2 py-2 rounded-md flex items-center gap-x-2 w-full hover:bg-zinc-700/10 dark:hover:bg-zinc-700/50 transition cursor-pointer text-left ${activeChannelId === channel._id && channel.type !== "AUDIO" ? "bg-zinc-700/20 dark:bg-zinc-700/50 text-indigo-600 dark:text-white" : "text-zinc-500 dark:text-zinc-400"}`}
                 >
-                  <span className="opacity-70 text-lg">#</span>
+                  {channel.type === "AUDIO" ? (
+                    <svg className="w-4 h-4 opacity-70" fill="currentColor" viewBox="0 0 24 24"><path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3zM17.3 11c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/></svg>
+                  ) : (
+                    <span className="opacity-70 text-lg">#</span>
+                  )}
                   <p className={`line-clamp-1 font-semibold text-[15px] transition group-hover:text-zinc-600 dark:group-hover:text-zinc-300 flex-1 ${activeChannelId === channel._id ? "text-zinc-800 dark:text-zinc-100" : ""}`}>
                     {channel.name}
                   </p>

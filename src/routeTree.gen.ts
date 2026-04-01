@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DemoClerkRouteImport } from './routes/demo/clerk'
+import { Route as ServerServerIdVoiceChannelIdRouteImport } from './routes/server/$serverId/voice/$channelId'
 
 const AboutRoute = AboutRouteImport.update({
   id: '/about',
@@ -28,35 +29,54 @@ const DemoClerkRoute = DemoClerkRouteImport.update({
   path: '/demo/clerk',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ServerServerIdVoiceChannelIdRoute =
+  ServerServerIdVoiceChannelIdRouteImport.update({
+    id: '/server/$serverId/voice/$channelId',
+    path: '/server/$serverId/voice/$channelId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/demo/clerk': typeof DemoClerkRoute
+  '/server/$serverId/voice/$channelId': typeof ServerServerIdVoiceChannelIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/demo/clerk': typeof DemoClerkRoute
+  '/server/$serverId/voice/$channelId': typeof ServerServerIdVoiceChannelIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/demo/clerk': typeof DemoClerkRoute
+  '/server/$serverId/voice/$channelId': typeof ServerServerIdVoiceChannelIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/about' | '/demo/clerk'
+  fullPaths:
+    | '/'
+    | '/about'
+    | '/demo/clerk'
+    | '/server/$serverId/voice/$channelId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/about' | '/demo/clerk'
-  id: '__root__' | '/' | '/about' | '/demo/clerk'
+  to: '/' | '/about' | '/demo/clerk' | '/server/$serverId/voice/$channelId'
+  id:
+    | '__root__'
+    | '/'
+    | '/about'
+    | '/demo/clerk'
+    | '/server/$serverId/voice/$channelId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
   DemoClerkRoute: typeof DemoClerkRoute
+  ServerServerIdVoiceChannelIdRoute: typeof ServerServerIdVoiceChannelIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -82,6 +102,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DemoClerkRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/server/$serverId/voice/$channelId': {
+      id: '/server/$serverId/voice/$channelId'
+      path: '/server/$serverId/voice/$channelId'
+      fullPath: '/server/$serverId/voice/$channelId'
+      preLoaderRoute: typeof ServerServerIdVoiceChannelIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -89,6 +116,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
   DemoClerkRoute: DemoClerkRoute,
+  ServerServerIdVoiceChannelIdRoute: ServerServerIdVoiceChannelIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -1,5 +1,5 @@
 import { internal } from "./_generated/api";
-import { internalMutation, mutation, query } from "./_generated/server";
+import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { requireServerMembership, requireServerModerator } from "./lib/auth";
 import { normalizeName } from "./lib/normalize";
@@ -20,7 +20,7 @@ export const create = mutation({
   args: {
     serverId: v.id("servers"),
     name: v.string(),
-    type: v.union(v.literal("TEXT"), v.literal("AUDIO")),
+    type: v.union(v.literal("TEXT"), v.literal("AUDIO"), v.literal("VOICE")),
     categoryId: v.optional(v.id("categories")),
   },
   handler: async (ctx, args) => {
@@ -136,5 +136,17 @@ export const cleanupRemovedChannelData = internalMutation({
         channelId: args.channelId,
       });
     }
+  },
+});
+
+export const getVoiceCredentials = internalQuery({
+  args: { serverId: v.id("servers"), channelId: v.id("channels") },
+  handler: async (ctx, args) => {
+    const { user } = await requireServerMembership(ctx, args.serverId);
+    const channel = await ctx.db.get(args.channelId);
+    if (!channel || channel.serverId !== args.serverId) {
+      throw new Error("Channel not found");
+    }
+    return { userId: user._id, name: user.name };
   },
 });

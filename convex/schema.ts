@@ -19,6 +19,7 @@ export default defineSchema({
         ),
       }),
     ),
+    activeVoiceChannelId: v.optional(v.id("channels")),
   })
     .index("by_clerk_id", ["clerkId"])
     .index("by_token_identifier", ["tokenIdentifier"]),
@@ -53,7 +54,7 @@ export default defineSchema({
   channels: defineTable({
     name: v.string(),
     serverId: v.id("servers"),
-    type: v.union(v.literal("TEXT"), v.literal("AUDIO")),
+    type: v.union(v.literal("TEXT"), v.literal("AUDIO"), v.literal("VOICE")),
     categoryId: v.optional(v.id("categories")),
     order: v.optional(v.number()),
     topLevelMessageCount: v.optional(v.number()),
